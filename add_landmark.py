@@ -21,7 +21,8 @@ total_frames = second * fps
 print('width='+str(width)+' height='+str(height)+' fps='+str(fps)+' fourcc='+decode_fourcc(fourcc))
 
 # keep the same size and fps
-writer = cv2.VideoWriter('test.mp4', fourcc, fps, (width, height))
+# always use mp4
+writer = cv2.VideoWriter('test.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (width, height))
 
 detector = dlib.get_frontal_face_detector()
 predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
