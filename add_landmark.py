@@ -3,26 +3,36 @@ import numpy as np
 import dlib
 
 
+source_video_name = '20200429_2B.mp4'
+destination_video_name = 'test.mp4'
+
 def decode_fourcc(v):
     v = int(v)
     return "".join([chr((v >> 8 * i) & 0xFF) for i in range(4)])
 
 face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
-cap = cv2.VideoCapture("20200429_2B.mp4")
+cap = cv2.VideoCapture(source_video_name)
 
 width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 fps = int(cap.get(cv2.CAP_PROP_FPS))
 fourcc = int(cap.get(cv2.CAP_PROP_FOURCC))
+frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-second = 10
-total_frames = second * fps
+second = 1
 
-print('width='+str(width)+' height='+str(height)+' fps='+str(fps)+' fourcc='+decode_fourcc(fourcc))
+handled_frames = 0
+remain_frames = second * fps
+
+print('Source video: ' + source_video_name)
+print('  width  = ' + str(width))
+print('  height = ' + str(height))
+print('  fps    = ' + str(fps))
+print('  fourcc = ' + str(fourcc))
 
 # keep the same size and fps
 # always use mp4
-writer = cv2.VideoWriter('test.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (width, height))
+writer = cv2.VideoWriter(destination_video_name, cv2.VideoWriter_fourcc(*'mp4v'), fps, (width, height))
 
 detector = dlib.get_frontal_face_detector()
 predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
@@ -33,6 +43,8 @@ frames_array = []
 ret, frame = cap.read()
 
 while ret:
+    print('Progress[' + str(handled_frames) + '/' + str(frame_count) + ']', end="\r")
+
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
     faces = detector(gray)
@@ -60,12 +72,16 @@ while ret:
     #frames_array.append(frame)
     writer.write(frame)
 
-    total_frames -= 1
-    if total_frames == 0:
+    handled_frames += 1
+
+    remain_frames -= 1
+    if remain_frames == 0:
         break
 
     # read next frame
     ret, frame = cap.read()
+
+print('\nWork done, total ' + str(handled_frames) + ' frames written to ' + destination_video_name)
 
 writer.release()
 cap.release()
