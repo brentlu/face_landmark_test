@@ -19,10 +19,8 @@ fps = int(cap.get(cv2.CAP_PROP_FPS))
 fourcc = int(cap.get(cv2.CAP_PROP_FOURCC))
 frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-second = 1
-
 handled_frames = 0
-remain_frames = second * fps
+output_frames = -1
 
 print('Source video: ' + source_video_name)
 print('  width  = ' + str(width))
@@ -36,8 +34,6 @@ writer = cv2.VideoWriter(destination_video_name, cv2.VideoWriter_fourcc(*'mp4v')
 
 detector = dlib.get_frontal_face_detector()
 predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
-
-frames_array = []
 
 # read the first frame
 ret, frame = cap.read()
@@ -70,13 +66,13 @@ while ret:
     #height, width, layers = frame.shape
     #size = (width, height)
     #frames_array.append(frame)
-    writer.write(frame)
 
+    writer.write(frame)
     handled_frames += 1
 
-    remain_frames -= 1
-    if remain_frames == 0:
-        break
+    if output_frames > 0:
+        if handled_frames >= output_frames:
+            break;
 
     # read next frame
     ret, frame = cap.read()
