@@ -10,6 +10,24 @@ def decode_fourcc(v):
     v = int(v)
     return "".join([chr((v >> 8 * i) & 0xFF) for i in range(4)])
 
+def draw_rect(img, rect, color):
+    # draw rectangle
+    x1 = rect.left()
+    y1 = rect.top()
+    x2 = rect.right()
+    y2 = rect.bottom()
+    if color == 'green':
+        cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 3)
+    elif color == 'red':
+        cv2.rectangle(img, (x1, y1), (x2, y2), (0, 0, 255), 3)
+    #print(f'draw_rect: ({x1}, {y1}), ({x2}, {y2}), {color}, {(x2 - x1) * (y2 - y1)}')
+
+def draw_landmarks(img, landmarks):
+    for n in range(0, 68):
+        x = landmarks.part(n).x
+        y = landmarks.part(n).y
+        cv2.circle(img, (x, y), 6, (255, 0, 0), -1)
+
 face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
 cap = cv2.VideoCapture(source_video_name)
 
@@ -40,27 +58,51 @@ ret, frame = cap.read()
 
 while ret:
     print('Progress[' + str(handled_frames) + '/' + str(frame_count) + ']', end="\r")
+    #print(f'Processing frame: {handled_frames + 1}')
 
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
+    # init
+    area_max = 0
+
+    # get rectangle of front faces
     faces = detector(gray)
+    faces_num = len(faces)
     for face in faces:
-        x1 = face.left()
-        y1 = face.top()
-        x2 = face.right()
-        y2 = face.bottom()
-        #cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 3)
+        if faces_num == 1:
+            # draw a green rect on the face
+            draw_rect(frame, face, 'green')
 
-        landmarks = predictor(gray, face)
+            # get landmarks
+            landmarks = predictor(gray, face)
+            draw_landmarks(frame, landmarks)
+        else:
+            # draw a red rect on every faces
+            draw_rect(frame, face, 'red')
 
-        for n in range(0, 68):
-            x = landmarks.part(n).x
-            y = landmarks.part(n).y
-            cv2.circle(frame, (x, y), 6, (255, 0, 0), -1)
+            x1 = face.left()
+            y1 = face.top()
+            x2 = face.right()
+            y2 = face.bottom()
+            area = (x2 - x1) * (y2 - y1)
+            if area > area_max:
+                area_max = area
+                face_max = face
+                #print(f'face_max: ({face_max.left()}, {face_max.top()}), ({face_max.right()}, {face_max.bottom()}), {(face_max.right() - face_max.left()) * (face_max.bottom() - face_max.top())}')
 
+    if faces_num > 1:
+        # draw a green rect on the face
+        draw_rect(frame, face_max, 'green')
 
+        # get landmarks
+        landmarks = predictor(gray, face_max)
+        draw_landmarks(frame, landmarks)
+
+    #print(str(faces_num) + ' faces found\n')
     #frameS = cv2.resize(frame, (960, 540)) 
     #cv2.imshow("Frame", frameS)
+    #cv2.waitKey(0)
+    #cv2.destroyAllWindows()
     #cv2.imshow("Frame", frame)
 
     #height, width, layers = frame.shape
