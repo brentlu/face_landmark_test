@@ -7,8 +7,8 @@ source_video_name = '20200429_2B.mp4'
 destination_video_name = 'test.mp4'
 
 def show_the_img(img):
-    frameS = cv2.resize(img, (960, 540))
-    cv2.imshow("Frame", frameS)
+    frame = cv2.resize(img, (960, 540))
+    cv2.imshow("Frame", frame)
     cv2.waitKey(0)
 
 def decode_fourcc(v):
@@ -33,7 +33,7 @@ def draw_landmarks(img, landmarks):
         y = landmarks.part(n).y
         cv2.circle(img, (x, y), 6, (255, 0, 0), -1)
 
-def draw_biggest_face(img, gray, faces):
+def draw_biggest_face(img, faces):
     # init
     area_max = 0
 
@@ -67,7 +67,7 @@ def draw_biggest_face(img, gray, faces):
 
     return None
 
-def draw_center_face(img, gray, faces):
+def draw_center_face(img, faces):
     threshold_left = width * 0.4
     threshold_right = width * 0.6
     faces_center = []
@@ -88,7 +88,7 @@ def draw_center_face(img, gray, faces):
         # more than one face in the center, select the biggest one
         #print('draw_center_face: more than one face in the center\n')
 
-        biggest = draw_biggest_face(img, gray, faces_center)
+        biggest = draw_biggest_face(img, faces_center)
         #if biggest == None:
         #    print(f'draw_center_face: fail to draw biggest face\n')
 
@@ -151,7 +151,7 @@ while True:
         handled_frames += 1
         continue
 
-    face = draw_center_face(frame, gray, faces)
+    face = draw_center_face(frame, faces)
     if face == None:
         # all faces found are not in the center position
         #print(f'fail to draw center face\n')
