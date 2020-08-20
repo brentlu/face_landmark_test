@@ -40,16 +40,12 @@ def draw_biggest_face(img, gray, faces):
     faces_num = len(faces)
     for face in faces:
         if faces_num == 1: # fast-pass
-            # draw a green rect on the face
+            # draw a green rect on the only-one face
             draw_rect(img, face, 'green')
 
-            # get landmarks
-            landmarks = predictor(gray, face)
-            draw_landmarks(img, landmarks)
-
-            return True
+            return face
         else:
-            # draw a red rect on every faces
+            # draw a red rect on every faces first
             draw_rect(img, face, 'red')
 
             x1 = face.left()
@@ -64,19 +60,14 @@ def draw_biggest_face(img, gray, faces):
                 #print(f'face_max: ({face_max.left()}, {face_max.top()}), ({face_max.right()}, {face_max.bottom()}), {(face_max.right() - face_max.left()) * (face_max.bottom() - face_max.top())}')
 
     if faces_num > 1:
-        # draw a green rect on the face
+        # draw a green rect on the biggest face
         draw_rect(img, face_max, 'green')
 
-        # get landmarks
-        landmarks = predictor(gray, face_max)
-        draw_landmarks(img, landmarks)
+        return face_max
 
-        return True
-
-    return False
+    return None
 
 def draw_center_face(img, gray, faces):
-    ret = False
     threshold_left = width * 0.4
     threshold_right = width * 0.6
     faces_center = []
@@ -94,24 +85,23 @@ def draw_center_face(img, gray, faces):
     faces_center_num = len(faces_center)
 
     if faces_center_num > 1:
+        # more than one face in the center, select the biggest one
         #print('draw_center_face: more than one face in the center\n')
-        ret = draw_biggest_face(img, gray, faces_center)
-        #if ret == False:
-            #print(f'draw_center_face: fail to draw biggest face\n')
+
+        biggest = draw_biggest_face(img, gray, faces_center)
+        #if biggest == None:
+        #    print(f'draw_center_face: fail to draw biggest face\n')
 
         #show_the_img(img)
+        return biggest
 
     elif faces_center_num == 1:
-        # draw a green rect on the face
+        # unique center face found, draw a green rect on the face
         draw_rect(img, faces_center[0], 'green')
 
-        # get landmarks
-        landmarks = predictor(gray, faces_center[0])
-        draw_landmarks(img, landmarks)
+        return faces_center[0]
 
-        ret = True
-
-    return ret
+    return None
 
 face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
 cap = cv2.VideoCapture(source_video_name)
@@ -156,27 +146,33 @@ while True:
     if faces_num == 0:
         #print('no face found')
 
+        # next frame
         writer.write(frame)
         handled_frames += 1
         continue
 
-    ret = draw_center_face(frame, gray, faces)
-    #if ret == False:
-    #    print(f'fail to draw center face\n')
-    #    show_the_img(frame)
+    face = draw_center_face(frame, gray, faces)
+    if face == None:
+        # all faces found are not in the center position
+        #print(f'fail to draw center face\n')
+        #show_the_img(frame)
 
+        # next frame
+        writer.write(frame)
+        handled_frames += 1
+        continue
+
+    # get landmarks
+    landmarks = predictor(gray, face)
+    draw_landmarks(frame, landmarks)
 
     #print(str(faces_num) + ' faces found\n')
-    #frameS = cv2.resize(frame, (960, 540)) 
-    #cv2.imshow("Frame", frameS)
-    #cv2.waitKey(0)
-    #cv2.destroyAllWindows()
-    #cv2.imshow("Frame", frame)
 
     #height, width, layers = frame.shape
     #size = (width, height)
     #frames_array.append(frame)
 
+    # next frame
     writer.write(frame)
     handled_frames += 1
 
