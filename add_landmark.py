@@ -8,9 +8,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def show_the_img(img):
-    frame = cv2.resize(img, (960, 540))
-    cv2.imshow("Frame", frame)
+def show_the_img(img, caption):
+
+    height, width, layers = img.shape
+    size = (int(width / 4), int(height / 4))
+
+    img_resize = cv2.resize(img, size)
+    cv2.imshow(caption, img_resize)
     cv2.waitKey(0)
 
 def decode_fourcc(v):
@@ -33,7 +37,7 @@ def calculate_ear_value(landmarks):
     return ear
 
 def draw_rect(img, rect, color):
-    if img == None:
+    if img is None:
         return
 
     # draw rectangle
@@ -50,7 +54,7 @@ def draw_rect(img, rect, color):
     #print(f'draw_rect: ({x1}, {y1}), ({x2}, {y2}), {color}, {(x2 - x1) * (y2 - y1)}')
 
 def draw_landmarks(img, landmarks, part, marker):
-    if img == None:
+    if img is None:
         return
 
     for n in range(0, 68):
@@ -128,7 +132,7 @@ def draw_center_face(img, faces):
         #if biggest == None:
         #    print(f'draw_center_face: fail to draw biggest face\n')
 
-        #show_the_img(img)
+        #show_the_img(img, 'Biggest face found')
         return biggest
 
     elif faces_center_num == 1:
@@ -139,8 +143,45 @@ def draw_center_face(img, faces):
 
     return None
 
-source_video_name = '20200429_2B.mp4'
+def auto_detect_rotation(path):
+
+    degrees = [-1, cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_180, cv2.ROTATE_90_COUNTERCLOCKWISE]
+    text = ['none', '90c', '180', '90cc']
+    counts = [0, 0, 0, 0]
+
+    hog_detector = dlib.get_frontal_face_detector()
+    cap = cv2.VideoCapture(path)
+
+    while True:
+        ret, frame = cap.read()
+        if ret == False:
+            # no frame to process
+            break;
+
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        for i in range(len(degrees)):
+            if degrees[i] != -1:
+                rotate = cv2.rotate(gray, degrees[i])
+                #show_the_img(frame_rotate, f'Degree index {i}')
+                faces = hog_detector(rotate)
+            else:
+                #show_the_img(frame, 'no rotation')
+                faces = hog_detector(gray)
+
+            counts[i] += len(faces)
+            #print(f'auto_detect_rotation: {len(faces)} faces found for index {i}')
+
+            if counts[i] >= 5:
+                print(f'auto_detect_rotation: need rotate {text[i]}')
+                cap.release()
+                return degrees[i]
+
+source_video_name = '20200528_1AB.mp4' # rotation test
+#source_video_name = '20200429_2B.mp4'
 destination_video_name = 'test.mp4'
+
+rotation = auto_detect_rotation(source_video_name)
 
 #face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
 cap = cv2.VideoCapture(source_video_name)
@@ -157,6 +198,11 @@ print('  height      = ' + str(height))
 print('  fps         = ' + str(fps))
 print('  fourcc      = ' + str(fourcc))
 print('  frame_count = ' + str(frame_count))
+
+if rotation == cv2.ROTATE_90_CLOCKWISE or rotation == cv2.ROTATE_90_COUNTERCLOCKWISE:
+    temp = width
+    width = height
+    height = temp
 
 # keep the same size and fps
 # always use mp4
@@ -190,9 +236,8 @@ while True:
             #print(f'Progress[{handled_frames}/{frame_count}]', end="\r")
             print(f'Processing frame: {handled_frames + 1}')
 
-            # TODO: auto-rotation
-            #frame = imutils.translate(frame, 600, 0)
-            #frame = imutils.rotate(frame, -90)
+            if rotation != -1:
+                frame = cv2.rotate(frame, rotation)
 
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             frame_state = 'hog_detect'
@@ -231,7 +276,7 @@ while True:
             if face == None:
                 # all faces found are not in the center position
                 print('fail to draw center face\n')
-                #show_the_img(frame)
+                #show_the_img(frame, 'no center face')
 
                 if use_cnn != False:
                     frame_state = 'cnn_detect'
@@ -243,12 +288,12 @@ while True:
         elif frame_state == 'draw_landmarks':
             # get landmarks
             landmarks = predictor(gray, face)
-            if no_draw == False
+            if no_draw == False:
                 draw_landmarks(frame, landmarks, 'left-eye', 'circle')
             else:
                 draw_landmarks(None, landmarks, 'left-eye', 'circle')
 
-            #show_the_img(frame)
+            #show_the_img(frame, 'landmarks drawn')
 
             frame_state = 'calculate_ear'
         elif frame_state == 'calculate_ear':
