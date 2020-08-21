@@ -9,13 +9,12 @@ import numpy as np
 
 
 def show_the_img(img, caption):
-
     height, width, layers = img.shape
     size = (int(width / 4), int(height / 4))
 
     img_resize = cv2.resize(img, size)
     cv2.imshow(caption, img_resize)
-    cv2.waitKey(0)
+    cv2.waitKey(1)
 
 def decode_fourcc(v):
     v = int(v)
@@ -143,14 +142,13 @@ def draw_center_face(img, faces):
 
     return None
 
-def auto_detect_rotation(path):
-
+def auto_detect_rotation(video_path):
     degrees = [-1, cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_180, cv2.ROTATE_90_COUNTERCLOCKWISE]
     text = ['none', '90c', '180', '90cc']
     counts = [0, 0, 0, 0]
 
     hog_detector = dlib.get_frontal_face_detector()
-    cap = cv2.VideoCapture(path)
+    cap = cv2.VideoCapture(video_path)
 
     while True:
         ret, frame = cap.read()
@@ -176,6 +174,78 @@ def auto_detect_rotation(path):
                 print(f'auto_detect_rotation: need rotate {text[i]}')
                 cap.release()
                 return degrees[i]
+
+def process_one_frame(frame, hog_detector, cnn_detector, predictor, use_cnn, osd_enable):
+    # init for frame
+    frame_state = 'init'
+    ret, ear = False, 0.0
+
+    while True:
+        if frame_state == 'init':
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            frame_state = 'hog_detect'
+        elif frame_state == 'hog_detect':
+            # get rectangle of front faces
+            faces = hog_detector(gray)
+            faces_num = len(faces)
+
+            if faces_num == 0:
+                print('no face found by hog detector')
+
+                if use_cnn != False:
+                    frame_state = 'cnn_detect'
+                else:
+                    break;
+            else:
+                # we've got some faces
+                frame_state = 'draw_face_rectangles'
+        elif frame_state == 'cnn_detect':
+            # get rectangle of front faces
+            faces = cnn_detector(gray)
+            faces_num = len(faces)
+
+            if faces_num == 0:
+                print('no face found by cnn detector')
+                break;
+            else:
+                # we've got some faces
+                # TODO: fix the rect
+                frame_state = 'draw_face_rectangles'
+        elif frame_state == 'draw_face_rectangles':
+            if osd_enable != False:
+                face = draw_center_face(frame, faces)
+            else:
+                face = draw_center_face(None, faces)
+            if face == None:
+                # all faces found are not in the center position
+                print('fail to draw center face\n')
+                #show_the_img(frame, 'no center face')
+
+                if use_cnn != False:
+                    frame_state = 'cnn_detect'
+                    use_cnn = False
+                else:
+                    break;
+            else:
+                frame_state = 'draw_landmarks'
+        elif frame_state == 'draw_landmarks':
+            # get landmarks
+            landmarks = predictor(gray, face)
+            if osd_enable != False:
+                draw_landmarks(frame, landmarks, 'left-eye', 'circle')
+            else:
+                draw_landmarks(None, landmarks, 'left-eye', 'circle')
+
+            #show_the_img(frame, 'landmarks drawn')
+
+            frame_state = 'calculate_ear'
+        elif frame_state == 'calculate_ear':
+            # everything is done!!
+            ear = calculate_ear_value(landmarks)
+            ret = True
+            break;
+
+    return ret, ear
 
 source_video_name = '20200528_1AB.mp4' # rotation test
 #source_video_name = '20200429_2B.mp4'
@@ -211,7 +281,7 @@ writer = cv2.VideoWriter(destination_video_name,
 
 # init for video
 handled_frames = 0
-output_frames = 30
+output_frames = -1
 
 times = []
 ears = []
@@ -226,94 +296,25 @@ while True:
         # no frame to process
         break;
 
-    # init for frame
-    frame_state = 'init'
-    use_cnn = True
-    no_draw = False
+    #print(f'Progress[{handled_frames}/{frame_count}]', end="\r")
+    print(f'Processing frame: {handled_frames + 1}')
 
-    while True:
-        if frame_state == 'init':
-            #print(f'Progress[{handled_frames}/{frame_count}]', end="\r")
-            print(f'Processing frame: {handled_frames + 1}')
+    if rotation != -1:
+        frame = cv2.rotate(frame, rotation)
 
-            if rotation != -1:
-                frame = cv2.rotate(frame, rotation)
+    ret, ear = process_one_frame(frame, hog_detector, cnn_detector, predictor,
+                                 True, # try again with cnn if hog fails
+                                 True) # draw osd info on the frame
+    if ret == False:
+        show_the_img(frame, 'Failed Frame')
+    else:
+        time_stamp = (handled_frames + 1) / fps
+        times.append(time_stamp)
+        ears.append(ear)
+        print(f'  ts: {time_stamp}, ear: {ear}')
 
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            frame_state = 'hog_detect'
-        elif frame_state == 'hog_detect':
-            # get rectangle of front faces
-            faces = hog_detector(gray)
-            faces_num = len(faces)
-
-            if faces_num == 0:
-                print('no face found by hog detector')
-
-                if use_cnn != False:
-                    frame_state = 'cnn_detect'
-                else:
-                    frame_state = 'next_frame'
-            else:
-                # we've got some faces
-                frame_state = 'draw_face_rectangles'
-        elif frame_state == 'cnn_detect':
-            # get rectangle of front faces
-            faces = cnn_detector(gray)
-            faces_num = len(faces)
-
-            if faces_num == 0:
-                print('no face found by cnn detector')
-                frame_state = 'next_frame'
-            else:
-                # we've got some faces
-                # TODO: fix the rect
-                frame_state = 'draw_face_rectangles'
-        elif frame_state == 'draw_face_rectangles':
-            if no_draw == False:
-                face = draw_center_face(frame, faces)
-            else:
-                face = draw_center_face(None, faces)
-            if face == None:
-                # all faces found are not in the center position
-                print('fail to draw center face\n')
-                #show_the_img(frame, 'no center face')
-
-                if use_cnn != False:
-                    frame_state = 'cnn_detect'
-                    use_cnn = False
-                else:
-                    frame_state = 'next_frame'
-            else:
-                frame_state = 'draw_landmarks'
-        elif frame_state == 'draw_landmarks':
-            # get landmarks
-            landmarks = predictor(gray, face)
-            if no_draw == False:
-                draw_landmarks(frame, landmarks, 'left-eye', 'circle')
-            else:
-                draw_landmarks(None, landmarks, 'left-eye', 'circle')
-
-            #show_the_img(frame, 'landmarks drawn')
-
-            frame_state = 'calculate_ear'
-        elif frame_state == 'calculate_ear':
-            ear = calculate_ear_value(landmarks)
-
-            times.append((handled_frames + 1) / fps)
-            ears.append(ear)
-
-            frame_state = 'next_frame'
-        elif frame_state == 'next_frame':
-            # next frame
-            writer.write(frame)
-            handled_frames += 1
-            break;
-
-    #print(str(faces_num) + ' faces found\n')
-
-    #height, width, layers = frame.shape
-    #size = (width, height)
-    #frames_array.append(frame)
+    writer.write(frame)
+    handled_frames += 1
 
     # don't want to process entire video
     if output_frames > 0:
