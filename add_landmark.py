@@ -33,6 +33,9 @@ def calculate_ear_value(landmarks):
     return ear
 
 def draw_rect(img, rect, color):
+    if img == None:
+        return
+
     # draw rectangle
     x1 = rect.left()
     y1 = rect.top()
@@ -47,6 +50,9 @@ def draw_rect(img, rect, color):
     #print(f'draw_rect: ({x1}, {y1}), ({x2}, {y2}), {color}, {(x2 - x1) * (y2 - y1)}')
 
 def draw_landmarks(img, landmarks, part, marker):
+    if img == None:
+        return
+
     for n in range(0, 68):
         if part == 'left-eye':
             if n < 42 or n >= 48:
@@ -177,6 +183,7 @@ while True:
     # init for frame
     frame_state = 'init'
     use_cnn = True
+    no_draw = False
 
     while True:
         if frame_state == 'init':
@@ -217,7 +224,10 @@ while True:
                 # TODO: fix the rect
                 frame_state = 'draw_face_rectangles'
         elif frame_state == 'draw_face_rectangles':
-            face = draw_center_face(frame, faces)
+            if no_draw == False:
+                face = draw_center_face(frame, faces)
+            else:
+                face = draw_center_face(None, faces)
             if face == None:
                 # all faces found are not in the center position
                 print('fail to draw center face\n')
@@ -233,7 +243,10 @@ while True:
         elif frame_state == 'draw_landmarks':
             # get landmarks
             landmarks = predictor(gray, face)
-            draw_landmarks(frame, landmarks, 'left-eye', 'circle')
+            if no_draw == False
+                draw_landmarks(frame, landmarks, 'left-eye', 'circle')
+            else:
+                draw_landmarks(None, landmarks, 'left-eye', 'circle')
 
             #show_the_img(frame)
 
