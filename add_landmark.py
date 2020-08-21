@@ -16,7 +16,6 @@ def show_the_img(img, caption):
     cv2.imshow(caption, img_resize)
     cv2.waitKey(1)
 
-
 def decode_fourcc(v):
     v = int(v)
     return "".join([chr((v >> 8 * i) & 0xFF) for i in range(4)])
@@ -152,16 +151,27 @@ def draw_landmarks(img, landmarks, part, marker):
         else:
             print('draw_landmarks: unknown marker %s' % (marker))
 
-def calculate_ear_value(landmarks):
-    # euclidean distances between the two sets of vertical eye landmarks
-    A = dist.euclidean((landmarks.part(43).x, landmarks.part(43).y),
-                       (landmarks.part(47).x, landmarks.part(47).y))
-    B = dist.euclidean((landmarks.part(44).x, landmarks.part(44).y),
-                       (landmarks.part(46).x, landmarks.part(46).y))
-
-    # euclidean distance between the horizontal eye landmark
-    C = dist.euclidean((landmarks.part(42).x, landmarks.part(42).y),
-                       (landmarks.part(45).x, landmarks.part(45).y))
+def calculate_ear_value(landmarks, eye):
+    if eye == 'left':
+        # euclidean distances between the two sets of vertical eye landmarks
+        A = dist.euclidean((landmarks.part(43).x, landmarks.part(43).y),
+                           (landmarks.part(47).x, landmarks.part(47).y))
+        B = dist.euclidean((landmarks.part(44).x, landmarks.part(44).y),
+                           (landmarks.part(46).x, landmarks.part(46).y))
+        # euclidean distance between the horizontal eye landmark
+        C = dist.euclidean((landmarks.part(42).x, landmarks.part(42).y),
+                           (landmarks.part(45).x, landmarks.part(45).y))
+    elif eye == 'right':
+        # euclidean distances between the two sets of vertical eye landmarks
+        A = dist.euclidean((landmarks.part(38).x, landmarks.part(38).y),
+                           (landmarks.part(40).x, landmarks.part(40).y))
+        B = dist.euclidean((landmarks.part(37).x, landmarks.part(37).y),
+                           (landmarks.part(41).x, landmarks.part(41).y))
+        # euclidean distance between the horizontal eye landmark
+        C = dist.euclidean((landmarks.part(39).x, landmarks.part(39).y),
+                           (landmarks.part(36).x, landmarks.part(36).y))
+    else:
+        print('calculate_ear_value: unknown eye %s' % (eye))
 
     ear = (A + B) / (2.0 * C)
 
@@ -170,7 +180,7 @@ def calculate_ear_value(landmarks):
 def process_one_frame(frame, hog_detector, cnn_detector, predictor, use_cnn, osd_enable):
     # init for frame
     frame_state = 'init'
-    ret, ear = False, 0.0
+    ret, ear_left, ear_right = False, 0.0, 0.0
 
     while True:
         if frame_state == 'init':
@@ -234,13 +244,14 @@ def process_one_frame(frame, hog_detector, cnn_detector, predictor, use_cnn, osd
             frame_state = 'calculate_ear'
         elif frame_state == 'calculate_ear':
             # finally everything is done!!
-            ear = calculate_ear_value(landmarks)
+            ear_left = calculate_ear_value(landmarks, 'left')
+            ear_right = calculate_ear_value(landmarks, 'right')
             ret = True
             break;
         else:
             print('process_one_frame: unknown state %s' % (frame_state))
 
-    return ret, ear
+    return ret, ear_left, ear_right
 
 def process_one_video(video_path, hog_detector, cnn_detector, predictor, output_path, output_frames):
     # init for video
@@ -294,17 +305,18 @@ def process_one_video(video_path, hog_detector, cnn_detector, predictor, output_
         if rotation != -1:
             frame = cv2.rotate(frame, rotation)
 
-        ret, ear = process_one_frame(frame, hog_detector, cnn_detector, predictor,
-                                     False, # try again with cnn if hog fails
-                                     output_path != None) # draw osd info on the frame
+        ret, ear_left, ear_right = \
+            process_one_frame(frame, hog_detector, cnn_detector, predictor,
+                              False, # try again with cnn if hog fails
+                              output_path != None) # draw osd info on the frame
         if ret == False:
             show_the_img(frame, 'Failed Frame')
             frame_fail += 1
         else:
             time_stamp = frame_index / fps
             times.append(time_stamp)
-            ears.append(ear)
-            print('ts: %4.3f, ear: %4.3f' % (time_stamp, ear))
+            ears.append(ear_left)
+            print('ts: %4.3f, ear: (%4.3f, %4.3f)' % (time_stamp, ear_left, ear_right))
 
         if output_path != None:
             writer.write(frame)
