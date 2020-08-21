@@ -1,6 +1,7 @@
 import cv2
-import numpy as np
 import dlib
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 source_video_name = '20200429_2B.mp4'
@@ -15,6 +16,22 @@ def decode_fourcc(v):
     v = int(v)
     return "".join([chr((v >> 8 * i) & 0xFF) for i in range(4)])
 
+def calculate_ear_value(landmarks):
+    p1 = np.array([landmarks.part(42).x, landmarks.part(42).y])
+    p2 = np.array([landmarks.part(43).x, landmarks.part(43).y])
+    p3 = np.array([landmarks.part(44).x, landmarks.part(44).y])
+    p4 = np.array([landmarks.part(45).x, landmarks.part(45).y])
+    p5 = np.array([landmarks.part(46).x, landmarks.part(46).y])
+    p6 = np.array([landmarks.part(47).x, landmarks.part(47).y])
+
+    op1 = np.linalg.norm(p1 - p4)
+    op2 = np.linalg.norm(p2 - p6)
+    op3 = np.linalg.norm(p3 - p5)
+
+    ear = (op2 + op3) / (2 * op1)
+
+    return ear
+
 def draw_rect(img, rect, color):
     # draw rectangle
     x1 = rect.left()
@@ -25,13 +42,23 @@ def draw_rect(img, rect, color):
         cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 3)
     elif color == 'red':
         cv2.rectangle(img, (x1, y1), (x2, y2), (0, 0, 255), 3)
+    else:
+        print(f'draw_rect: unknown color {color}')
     #print(f'draw_rect: ({x1}, {y1}), ({x2}, {y2}), {color}, {(x2 - x1) * (y2 - y1)}')
 
-def draw_landmarks(img, landmarks):
-    for n in range(0, 68):
-        x = landmarks.part(n).x
-        y = landmarks.part(n).y
-        cv2.circle(img, (x, y), 6, (255, 0, 0), -1)
+def draw_landmarks(img, landmarks, part):
+    if part == 'all':
+        for n in range(0, 68):
+            x = landmarks.part(n).x
+            y = landmarks.part(n).y
+            cv2.circle(img, (x, y), 6, (255, 0, 0), -1)
+    elif part == 'left-eye':
+        for n in range(42, 48):
+            x = landmarks.part(n).x
+            y = landmarks.part(n).y
+            cv2.circle(img, (x, y), 6, (255, 0, 0), -1)
+    else:
+        print(f'draw_landmarks: unknown part {part}')
 
 def draw_biggest_face(img, faces):
     # init
@@ -126,6 +153,9 @@ writer = cv2.VideoWriter(destination_video_name, cv2.VideoWriter_fourcc(*'mp4v')
 handled_frames = 0
 output_frames = 30
 
+times = []
+ears = []
+
 hog_detector = dlib.get_frontal_face_detector()
 cnn_detector = dlib.cnn_face_detection_model_v1('./mmod_human_face_detector.dat')
 predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
@@ -190,7 +220,14 @@ while True:
         elif frame_state == 'draw_landmarks':
             # get landmarks
             landmarks = predictor(gray, face)
-            draw_landmarks(frame, landmarks)
+            draw_landmarks(frame, landmarks, 'left-eye')
+            frame_state = 'calculate_ear'
+        elif frame_state == 'calculate_ear':
+            ear = calculate_ear_value(landmarks)
+
+            times.append((handled_frames + 1) / fps)
+            ears.append(ear)
+
             frame_state = 'next_frame'
         elif frame_state == 'next_frame':
             # next frame
@@ -213,3 +250,11 @@ print('\nWork done, total ' + str(handled_frames) + ' frames written to ' + dest
 
 writer.release()
 cap.release()
+
+plt.plot(times, ears, "r--")
+
+plt.title("EAR-time", fontsize = 20)
+plt.xlabel("time", fontsize = 12)
+plt.ylabel("EAR", fontsize = 12)
+
+plt.show()
