@@ -49,8 +49,7 @@ def draw_rect(img, rect, color):
     elif color == 'red':
         cv2.rectangle(img, (x1, y1), (x2, y2), (0, 0, 255), 3)
     else:
-        print(f'draw_rect: unknown color {color}')
-    #print(f'draw_rect: ({x1}, {y1}), ({x2}, {y2}), {color}, {(x2 - x1) * (y2 - y1)}')
+        print('draw_rect: unknown color %s' % (color))
 
 def draw_landmarks(img, landmarks, part, marker):
     if img is None:
@@ -61,7 +60,7 @@ def draw_landmarks(img, landmarks, part, marker):
             if n < 42 or n >= 48:
                 continue
         elif part != 'all':
-            print(f'draw_landmarks: unknown part {part}')
+            print('draw_landmarks: unknown part %s' % (part))
 
         x = landmarks.part(n).x
         y = landmarks.part(n).y
@@ -71,6 +70,8 @@ def draw_landmarks(img, landmarks, part, marker):
             cv2.circle(img, (x, y), 2, (255, 0, 0), -1)
             cv2.putText(img, str(n), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                         (255, 0, 0), 1, 8, False);
+        else:
+            print('draw_landmarks: unknown marker %s' % (marker))
 
 def draw_biggest_face(img, faces):
     # init
@@ -96,7 +97,6 @@ def draw_biggest_face(img, faces):
             if area > area_max:
                 area_max = area
                 face_max = face
-                #print(f'face_max: ({face_max.left()}, {face_max.top()}), ({face_max.right()}, {face_max.bottom()}), {(face_max.right() - face_max.left()) * (face_max.bottom() - face_max.top())}')
 
     if faces_num > 1:
         # draw a green rect on the biggest face
@@ -107,6 +107,7 @@ def draw_biggest_face(img, faces):
     return None
 
 def draw_center_face(img, faces):
+    height, width, layers = img.shape
     threshold_left = width * 0.4
     threshold_right = width * 0.6
     faces_center = []
@@ -125,11 +126,12 @@ def draw_center_face(img, faces):
 
     if faces_center_num > 1:
         # more than one face in the center, select the biggest one
-        #print('draw_center_face: more than one face in the center\n')
+        #print('draw_center_face: more than one face in the center')
 
         biggest = draw_biggest_face(img, faces_center)
-        #if biggest == None:
-        #    print(f'draw_center_face: fail to draw biggest face\n')
+        if biggest == None:
+            # should never happen
+            print('draw_center_face: fail to draw biggest face')
 
         #show_the_img(img, 'Biggest face found')
         return biggest
@@ -140,14 +142,14 @@ def draw_center_face(img, faces):
 
         return faces_center[0]
 
+    # all faces are not in the center
     return None
 
-def auto_detect_rotation(video_path):
+def auto_detect_rotation(video_path, detector):
     degrees = [-1, cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_180, cv2.ROTATE_90_COUNTERCLOCKWISE]
     text = ['none', '90c', '180', '90cc']
     counts = [0, 0, 0, 0]
 
-    hog_detector = dlib.get_frontal_face_detector()
     cap = cv2.VideoCapture(video_path)
 
     while True:
@@ -162,16 +164,19 @@ def auto_detect_rotation(video_path):
             if degrees[i] != -1:
                 rotate = cv2.rotate(gray, degrees[i])
                 #show_the_img(frame_rotate, f'Degree index {i}')
-                faces = hog_detector(rotate)
+                faces = detector(rotate)
             else:
                 #show_the_img(frame, 'no rotation')
-                faces = hog_detector(gray)
+                faces = detector(gray)
 
-            counts[i] += len(faces)
-            #print(f'auto_detect_rotation: {len(faces)} faces found for index {i}')
+            faces_num = len(faces)
+            if faces_num != 0:
+                counts[i] += faces_num
+                #print('auto_detect_rotation: %d faces found for index %d' % (faces_num, i))
 
             if counts[i] >= 5:
-                print(f'auto_detect_rotation: need rotate {text[i]}')
+                if degrees[i] != -1:
+                    print('Rotation detected: need to rotate %s' % (text[i]))
                 cap.release()
                 return degrees[i]
 
@@ -190,9 +195,10 @@ def process_one_frame(frame, hog_detector, cnn_detector, predictor, use_cnn, osd
             faces_num = len(faces)
 
             if faces_num == 0:
-                print('no face found by hog detector')
+                print('process_one_frame: no face found by hog detector')
 
                 if use_cnn != False:
+                    # try very slow cnn detector
                     frame_state = 'cnn_detect'
                 else:
                     break;
@@ -205,7 +211,7 @@ def process_one_frame(frame, hog_detector, cnn_detector, predictor, use_cnn, osd
             faces_num = len(faces)
 
             if faces_num == 0:
-                print('no face found by cnn detector')
+                print('process_one_frame: no face found by cnn detector')
                 break;
             else:
                 # we've got some faces
@@ -218,7 +224,7 @@ def process_one_frame(frame, hog_detector, cnn_detector, predictor, use_cnn, osd
                 face = draw_center_face(None, faces)
             if face == None:
                 # all faces found are not in the center position
-                print('fail to draw center face\n')
+                print('process_one_frame: fail to draw center face')
                 #show_the_img(frame, 'no center face')
 
                 if use_cnn != False:
@@ -240,96 +246,117 @@ def process_one_frame(frame, hog_detector, cnn_detector, predictor, use_cnn, osd
 
             frame_state = 'calculate_ear'
         elif frame_state == 'calculate_ear':
-            # everything is done!!
+            # finally everything is done!!
             ear = calculate_ear_value(landmarks)
             ret = True
             break;
+        else:
+            print('process_one_frame: unknown state %s' % (frame_state))
 
     return ret, ear
 
-source_video_name = '20200528_1AB.mp4' # rotation test
-#source_video_name = '20200429_2B.mp4'
-destination_video_name = 'test.mp4'
+def process_one_video(video_path, hog_detector, cnn_detector, predictor, output_path, output_frames):
+    # init for video
+    frame_index = 0
+    frame_fail = 0
+    times = []
+    ears = []
 
-rotation = auto_detect_rotation(source_video_name)
+    cap = cv2.VideoCapture(video_path)
 
-#face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
-cap = cv2.VideoCapture(source_video_name)
+    if cap.isOpened() == False:
+        print('Fail to open source video %s' % (video_path))
+        return times, ears
 
-width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-fps = int(cap.get(cv2.CAP_PROP_FPS))
-fourcc = int(cap.get(cv2.CAP_PROP_FOURCC))
-frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps = int(cap.get(cv2.CAP_PROP_FPS))
+    fourcc = int(cap.get(cv2.CAP_PROP_FOURCC))
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-print('Source video: ' + source_video_name)
-print('  width       = ' + str(width))
-print('  height      = ' + str(height))
-print('  fps         = ' + str(fps))
-print('  fourcc      = ' + str(fourcc))
-print('  frame_count = ' + str(frame_count))
+    print('Source video:   %s' % (video_path))
+    print('  width       = %d' % (width))
+    print('  height      = %d' % (height))
+    print('  fps         = %d' % (fps))
+    print('  fourcc      = %s' % (decode_fourcc(fourcc)))
+    print('  frame_count = %d' % (frame_count))
 
-if rotation == cv2.ROTATE_90_CLOCKWISE or rotation == cv2.ROTATE_90_COUNTERCLOCKWISE:
-    temp = width
-    width = height
-    height = temp
+    rotation = auto_detect_rotation(video_path, hog_detector)
 
-# keep the same size and fps
-# always use mp4
-writer = cv2.VideoWriter(destination_video_name,
-                         cv2.VideoWriter_fourcc(*'mp4v'), fps, (width, height))
+    if rotation == cv2.ROTATE_90_CLOCKWISE or rotation == cv2.ROTATE_90_COUNTERCLOCKWISE:
+        temp = width
+        width = height
+        height = temp
 
-# init for video
-handled_frames = 0
-output_frames = -1
+    if output_path != None:
+        # keep the same size and fps
+        # always use mp4
+        writer = cv2.VideoWriter(output_path, cv2.VideoWriter_fourcc(*'mp4v'),
+                                 fps, (width, height))
 
-times = []
-ears = []
-
-hog_detector = dlib.get_frontal_face_detector()
-cnn_detector = dlib.cnn_face_detection_model_v1('./mmod_human_face_detector.dat')
-predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
-
-while True:
-    ret, frame = cap.read()
-    if ret == False:
-        # no frame to process
-        break;
-
-    #print(f'Progress[{handled_frames}/{frame_count}]', end="\r")
-    print(f'Processing frame: {handled_frames + 1}')
-
-    if rotation != -1:
-        frame = cv2.rotate(frame, rotation)
-
-    ret, ear = process_one_frame(frame, hog_detector, cnn_detector, predictor,
-                                 True, # try again with cnn if hog fails
-                                 True) # draw osd info on the frame
-    if ret == False:
-        show_the_img(frame, 'Failed Frame')
-    else:
-        time_stamp = (handled_frames + 1) / fps
-        times.append(time_stamp)
-        ears.append(ear)
-        print(f'  ts: {time_stamp}, ear: {ear}')
-
-    writer.write(frame)
-    handled_frames += 1
-
-    # don't want to process entire video
-    if output_frames > 0:
-        if handled_frames >= output_frames:
+    while True:
+        ret, frame = cap.read()
+        if ret == False:
+            # no frame to process
             break;
 
-print(f'\nWork done, total {handled_frames} frames written to {destination_video_name}')
+        frame_index += 1
 
-writer.release()
-cap.release()
+        print('Processing frame: %d / %d: ' % (frame_index, frame_count), end = '')
 
-plt.plot(times, ears, "r--")
+        if rotation != -1:
+            frame = cv2.rotate(frame, rotation)
 
-plt.title("EAR-time", fontsize = 20)
-plt.xlabel("time", fontsize = 12)
-plt.ylabel("EAR", fontsize = 12)
+        ret, ear = process_one_frame(frame, hog_detector, cnn_detector, predictor,
+                                     False, # try again with cnn if hog fails
+                                     output_path != None) # draw osd info on the frame
+        if ret == False:
+            show_the_img(frame, 'Failed Frame')
+            frame_fail += 1
+        else:
+            time_stamp = frame_index / fps
+            times.append(time_stamp)
+            ears.append(ear)
+            print('ts: %4.3f, ear: %4.3f' % (time_stamp, ear))
 
-plt.show()
+        if output_path != None:
+            writer.write(frame)
+
+        # don't want to process entire video
+        if output_frames > 0:
+            if frame_index >= output_frames:
+                break;
+
+    print('Video done, %d frames written to %s' % (frame_index, output_path))
+    print('  %d frames (%3.2f%%) failed to process' % (frame_fail, frame_fail * 100.0 / frame_count))
+
+    # clean-up
+    if output_path != None:
+        writer.release()
+    cap.release()
+
+    return times, ears
+
+def main():
+    source_video_path = '20200528_1AB.mp4' # rotation test
+    #source_video_path = '20200429_2B.mp4'
+    destination_video_path = 'test.mp4'
+
+    hog_detector = dlib.get_frontal_face_detector()
+    cnn_detector = dlib.cnn_face_detection_model_v1('./mmod_human_face_detector.dat')
+    predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
+
+    times, ears = process_one_video(source_video_path, hog_detector, cnn_detector, predictor,
+                                    destination_video_path, # None to disable output
+                                    -1)                     # -1 to process all frames
+
+    if len(times) != 0:
+        plt.plot(times, ears, "r--")
+        plt.title("EAR-time", fontsize = 20)
+        plt.xlabel("time", fontsize = 12)
+        plt.ylabel("EAR", fontsize = 12)
+
+        plt.show()
+
+if __name__ == '__main__':
+    main()
