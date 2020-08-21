@@ -4,9 +4,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-source_video_name = '20200429_2B.mp4'
-destination_video_name = 'test.mp4'
-
 def show_the_img(img):
     frame = cv2.resize(img, (960, 540))
     cv2.imshow("Frame", frame)
@@ -46,19 +43,21 @@ def draw_rect(img, rect, color):
         print(f'draw_rect: unknown color {color}')
     #print(f'draw_rect: ({x1}, {y1}), ({x2}, {y2}), {color}, {(x2 - x1) * (y2 - y1)}')
 
-def draw_landmarks(img, landmarks, part):
-    if part == 'all':
-        for n in range(0, 68):
-            x = landmarks.part(n).x
-            y = landmarks.part(n).y
+def draw_landmarks(img, landmarks, part, marker):
+    for n in range(0, 68):
+        if part == 'left-eye':
+            if n < 42 or n >= 48:
+                continue
+        elif part != 'all':
+            print(f'draw_landmarks: unknown part {part}')
+
+        x = landmarks.part(n).x
+        y = landmarks.part(n).y
+        if marker == 'circle':
             cv2.circle(img, (x, y), 6, (255, 0, 0), -1)
-    elif part == 'left-eye':
-        for n in range(42, 48):
-            x = landmarks.part(n).x
-            y = landmarks.part(n).y
-            cv2.circle(img, (x, y), 6, (255, 0, 0), -1)
-    else:
-        print(f'draw_landmarks: unknown part {part}')
+        elif marker == 'text':
+            cv2.circle(img, (x, y), 2, (255, 0, 0), -1)
+            cv2.putText(img, str(n), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1, 8, False);
 
 def draw_biggest_face(img, faces):
     # init
@@ -130,6 +129,9 @@ def draw_center_face(img, faces):
 
     return None
 
+source_video_name = '20200429_2B.mp4'
+destination_video_name = 'test.mp4'
+
 #face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
 cap = cv2.VideoCapture(source_video_name)
 
@@ -140,10 +142,11 @@ fourcc = int(cap.get(cv2.CAP_PROP_FOURCC))
 frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
 print('Source video: ' + source_video_name)
-print('  width  = ' + str(width))
-print('  height = ' + str(height))
-print('  fps    = ' + str(fps))
-print('  fourcc = ' + str(fourcc))
+print('  width       = ' + str(width))
+print('  height      = ' + str(height))
+print('  fps         = ' + str(fps))
+print('  fourcc      = ' + str(fourcc))
+print('  frame_count = ' + str(frame_count))
 
 # keep the same size and fps
 # always use mp4
@@ -172,8 +175,12 @@ while True:
 
     while True:
         if frame_state == 'init':
-            #print('Progress[' + str(handled_frames) + '/' + str(frame_count) + ']', end="\r")
+            #print(f'Progress[{handled_frames}/{frame_count}]', end="\r")
             print(f'Processing frame: {handled_frames + 1}')
+
+            # TODO: auto-rotation
+            #frame = imutils.translate(frame, 600, 0)
+            #frame = imutils.rotate(frame, -90)
 
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             frame_state = 'hog_detect'
@@ -202,6 +209,7 @@ while True:
                 frame_state = 'next_frame'
             else:
                 # we've got some faces
+                # TODO: fix the rect
                 frame_state = 'draw_face_rectangles'
         elif frame_state == 'draw_face_rectangles':
             face = draw_center_face(frame, faces)
@@ -220,7 +228,10 @@ while True:
         elif frame_state == 'draw_landmarks':
             # get landmarks
             landmarks = predictor(gray, face)
-            draw_landmarks(frame, landmarks, 'left-eye')
+            draw_landmarks(frame, landmarks, 'left-eye', 'circle')
+
+            #show_the_img(frame)
+
             frame_state = 'calculate_ear'
         elif frame_state == 'calculate_ear':
             ear = calculate_ear_value(landmarks)
