@@ -1,5 +1,9 @@
+
+from scipy.spatial import distance as dist
+#from imutils import face_utils
 import cv2
 import dlib
+#import imutils
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -14,18 +18,14 @@ def decode_fourcc(v):
     return "".join([chr((v >> 8 * i) & 0xFF) for i in range(4)])
 
 def calculate_ear_value(landmarks):
-    p1 = np.array([landmarks.part(42).x, landmarks.part(42).y])
-    p2 = np.array([landmarks.part(43).x, landmarks.part(43).y])
-    p3 = np.array([landmarks.part(44).x, landmarks.part(44).y])
-    p4 = np.array([landmarks.part(45).x, landmarks.part(45).y])
-    p5 = np.array([landmarks.part(46).x, landmarks.part(46).y])
-    p6 = np.array([landmarks.part(47).x, landmarks.part(47).y])
+    # euclidean distances between the two sets of vertical eye landmarks
+    A = dist.euclidean((landmarks.part(43).x, landmarks.part(43).y), (landmarks.part(47).x, landmarks.part(47).y))
+    B = dist.euclidean((landmarks.part(44).x, landmarks.part(44).y), (landmarks.part(46).x, landmarks.part(46).y))
 
-    op1 = np.linalg.norm(p1 - p4)
-    op2 = np.linalg.norm(p2 - p6)
-    op3 = np.linalg.norm(p3 - p5)
+    # euclidean distance between the horizontal eye landmark
+    C = dist.euclidean((landmarks.part(42).x, landmarks.part(42).y), (landmarks.part(45).x, landmarks.part(45).y))
 
-    ear = (op2 + op3) / (2 * op1)
+    ear = (A + B) / (2.0 * C)
 
     return ear
 
