@@ -16,134 +16,10 @@ def show_the_img(img, caption):
     cv2.imshow(caption, img_resize)
     cv2.waitKey(1)
 
+
 def decode_fourcc(v):
     v = int(v)
     return "".join([chr((v >> 8 * i) & 0xFF) for i in range(4)])
-
-def calculate_ear_value(landmarks):
-    # euclidean distances between the two sets of vertical eye landmarks
-    A = dist.euclidean((landmarks.part(43).x, landmarks.part(43).y),
-                       (landmarks.part(47).x, landmarks.part(47).y))
-    B = dist.euclidean((landmarks.part(44).x, landmarks.part(44).y),
-                       (landmarks.part(46).x, landmarks.part(46).y))
-
-    # euclidean distance between the horizontal eye landmark
-    C = dist.euclidean((landmarks.part(42).x, landmarks.part(42).y),
-                       (landmarks.part(45).x, landmarks.part(45).y))
-
-    ear = (A + B) / (2.0 * C)
-
-    return ear
-
-def draw_rect(img, rect, color):
-    if img is None:
-        return
-
-    # draw rectangle
-    x1 = rect.left()
-    y1 = rect.top()
-    x2 = rect.right()
-    y2 = rect.bottom()
-    if color == 'green':
-        cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 3)
-    elif color == 'red':
-        cv2.rectangle(img, (x1, y1), (x2, y2), (0, 0, 255), 3)
-    else:
-        print('draw_rect: unknown color %s' % (color))
-
-def draw_landmarks(img, landmarks, part, marker):
-    if img is None:
-        return
-
-    for n in range(0, 68):
-        if part == 'left-eye':
-            if n < 42 or n >= 48:
-                continue
-        elif part != 'all':
-            print('draw_landmarks: unknown part %s' % (part))
-
-        x = landmarks.part(n).x
-        y = landmarks.part(n).y
-        if marker == 'circle':
-            cv2.circle(img, (x, y), 6, (255, 0, 0), -1)
-        elif marker == 'text':
-            cv2.circle(img, (x, y), 2, (255, 0, 0), -1)
-            cv2.putText(img, str(n), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                        (255, 0, 0), 1, 8, False);
-        else:
-            print('draw_landmarks: unknown marker %s' % (marker))
-
-def draw_biggest_face(img, faces):
-    # init
-    area_max = 0
-
-    faces_num = len(faces)
-    for face in faces:
-        if faces_num == 1: # fast-pass
-            # draw a green rect on the only-one face
-            draw_rect(img, face, 'green')
-
-            return face
-        else:
-            # draw a red rect on every faces first
-            draw_rect(img, face, 'red')
-
-            x1 = face.left()
-            y1 = face.top()
-            x2 = face.right()
-            y2 = face.bottom()
-
-            area = (x2 - x1) * (y2 - y1)
-            if area > area_max:
-                area_max = area
-                face_max = face
-
-    if faces_num > 1:
-        # draw a green rect on the biggest face
-        draw_rect(img, face_max, 'green')
-
-        return face_max
-
-    return None
-
-def draw_center_face(img, faces):
-    height, width, layers = img.shape
-    threshold_left = width * 0.4
-    threshold_right = width * 0.6
-    faces_center = []
-
-    for face in faces:
-        x1 = face.left()
-        x2 = face.right()
-
-        if x1 < threshold_right and x2 > threshold_left:
-            faces_center.append(face)
-        else:
-            # draw a red rect on faces not in the center
-            draw_rect(img, face, 'red')
-
-    faces_center_num = len(faces_center)
-
-    if faces_center_num > 1:
-        # more than one face in the center, select the biggest one
-        #print('draw_center_face: more than one face in the center')
-
-        biggest = draw_biggest_face(img, faces_center)
-        if biggest == None:
-            # should never happen
-            print('draw_center_face: fail to draw biggest face')
-
-        #show_the_img(img, 'Biggest face found')
-        return biggest
-
-    elif faces_center_num == 1:
-        # unique center face found, draw a green rect on the face
-        draw_rect(img, faces_center[0], 'green')
-
-        return faces_center[0]
-
-    # all faces are not in the center
-    return None
 
 def auto_detect_rotation(video_path, detector):
     degrees = [-1, cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_180, cv2.ROTATE_90_COUNTERCLOCKWISE]
@@ -179,6 +55,117 @@ def auto_detect_rotation(video_path, detector):
                     print('Rotation detected: need to rotate %s' % (text[i]))
                 cap.release()
                 return degrees[i]
+
+def find_biggest_face(faces):
+    # init
+    area_max = 0
+
+    faces_num = len(faces)
+    for face in faces:
+        if faces_num == 1: # fast-pass
+            return face
+        else:
+            x1 = face.left()
+            y1 = face.top()
+            x2 = face.right()
+            y2 = face.bottom()
+
+            area = (x2 - x1) * (y2 - y1)
+            if area > area_max:
+                area_max = area
+                face_max = face
+
+    if faces_num > 1:
+        return face_max
+
+    return None
+
+def find_target_face(img, faces):
+    height, width, layers = img.shape
+    threshold_left = width * 0.4
+    threshold_right = width * 0.6
+    faces_center = []
+
+    for face in faces:
+        x1 = face.left()
+        x2 = face.right()
+
+        if x1 < threshold_right and x2 > threshold_left:
+            faces_center.append(face)
+
+    faces_center_num = len(faces_center)
+
+    if faces_center_num > 1:
+        # more than one face in the center, select the biggest one
+        #print('find_target_face: more than one face in the center')
+
+        biggest = find_biggest_face(faces_center)
+        if biggest == None:
+            # should never happen
+            print('find_target_face: fail to find biggest face')
+
+        #show_the_img(img, 'Biggest face found')
+        return biggest
+    elif faces_center_num == 1:
+        # unique center face found, draw a green rect on the face
+        return faces_center[0]
+
+    # all faces are not in the center
+    return None
+
+def draw_rect(img, rect, color):
+    # draw rectangle
+    x1 = rect.left()
+    y1 = rect.top()
+    x2 = rect.right()
+    y2 = rect.bottom()
+    if color == 'green':
+        cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 3)
+    elif color == 'red':
+        cv2.rectangle(img, (x1, y1), (x2, y2), (0, 0, 255), 3)
+    else:
+        print('draw_rect: unknown color %s' % (color))
+
+def draw_face_rectangles(img, faces, target):
+    for face in faces:
+        draw_rect(img, face, 'red')
+
+    if target != None:
+        draw_rect(img, target, 'green')
+
+def draw_landmarks(img, landmarks, part, marker):
+    for n in range(0, 68):
+        if part == 'left-eye':
+            if n < 42 or n >= 48:
+                continue
+        elif part != 'all':
+            print('draw_landmarks: unknown part %s' % (part))
+
+        x = landmarks.part(n).x
+        y = landmarks.part(n).y
+        if marker == 'circle':
+            cv2.circle(img, (x, y), 6, (255, 0, 0), -1)
+        elif marker == 'text':
+            cv2.circle(img, (x, y), 2, (255, 0, 0), -1)
+            cv2.putText(img, str(n), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                        (255, 0, 0), 1, 8, False);
+        else:
+            print('draw_landmarks: unknown marker %s' % (marker))
+
+def calculate_ear_value(landmarks):
+    # euclidean distances between the two sets of vertical eye landmarks
+    A = dist.euclidean((landmarks.part(43).x, landmarks.part(43).y),
+                       (landmarks.part(47).x, landmarks.part(47).y))
+    B = dist.euclidean((landmarks.part(44).x, landmarks.part(44).y),
+                       (landmarks.part(46).x, landmarks.part(46).y))
+
+    # euclidean distance between the horizontal eye landmark
+    C = dist.euclidean((landmarks.part(42).x, landmarks.part(42).y),
+                       (landmarks.part(45).x, landmarks.part(45).y))
+
+    ear = (A + B) / (2.0 * C)
+
+    return ear
 
 def process_one_frame(frame, hog_detector, cnn_detector, predictor, use_cnn, osd_enable):
     # init for frame
@@ -218,29 +205,29 @@ def process_one_frame(frame, hog_detector, cnn_detector, predictor, use_cnn, osd
                 # TODO: fix the rect
                 frame_state = 'draw_face_rectangles'
         elif frame_state == 'draw_face_rectangles':
-            if osd_enable != False:
-                face = draw_center_face(frame, faces)
-            else:
-                face = draw_center_face(None, faces)
-            if face == None:
+            target = find_target_face(frame, faces)
+
+            if target == None:
                 # all faces found are not in the center position
-                print('process_one_frame: fail to draw center face')
+                print('process_one_frame: fail to find target face')
                 #show_the_img(frame, 'no center face')
 
                 if use_cnn != False:
                     frame_state = 'cnn_detect'
                     use_cnn = False
                 else:
+                    if osd_enable != False:
+                        draw_face_rectangles(frame, faces, target)
                     break;
             else:
+                if osd_enable != False:
+                    draw_face_rectangles(frame, faces, target)
                 frame_state = 'draw_landmarks'
         elif frame_state == 'draw_landmarks':
             # get landmarks
-            landmarks = predictor(gray, face)
+            landmarks = predictor(gray, target)
             if osd_enable != False:
                 draw_landmarks(frame, landmarks, 'left-eye', 'circle')
-            else:
-                draw_landmarks(None, landmarks, 'left-eye', 'circle')
 
             #show_the_img(frame, 'landmarks drawn')
 
