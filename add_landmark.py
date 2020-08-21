@@ -19,11 +19,14 @@ def decode_fourcc(v):
 
 def calculate_ear_value(landmarks):
     # euclidean distances between the two sets of vertical eye landmarks
-    A = dist.euclidean((landmarks.part(43).x, landmarks.part(43).y), (landmarks.part(47).x, landmarks.part(47).y))
-    B = dist.euclidean((landmarks.part(44).x, landmarks.part(44).y), (landmarks.part(46).x, landmarks.part(46).y))
+    A = dist.euclidean((landmarks.part(43).x, landmarks.part(43).y),
+                       (landmarks.part(47).x, landmarks.part(47).y))
+    B = dist.euclidean((landmarks.part(44).x, landmarks.part(44).y),
+                       (landmarks.part(46).x, landmarks.part(46).y))
 
     # euclidean distance between the horizontal eye landmark
-    C = dist.euclidean((landmarks.part(42).x, landmarks.part(42).y), (landmarks.part(45).x, landmarks.part(45).y))
+    C = dist.euclidean((landmarks.part(42).x, landmarks.part(42).y),
+                       (landmarks.part(45).x, landmarks.part(45).y))
 
     ear = (A + B) / (2.0 * C)
 
@@ -57,7 +60,8 @@ def draw_landmarks(img, landmarks, part, marker):
             cv2.circle(img, (x, y), 6, (255, 0, 0), -1)
         elif marker == 'text':
             cv2.circle(img, (x, y), 2, (255, 0, 0), -1)
-            cv2.putText(img, str(n), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1, 8, False);
+            cv2.putText(img, str(n), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                        (255, 0, 0), 1, 8, False);
 
 def draw_biggest_face(img, faces):
     # init
@@ -150,7 +154,8 @@ print('  frame_count = ' + str(frame_count))
 
 # keep the same size and fps
 # always use mp4
-writer = cv2.VideoWriter(destination_video_name, cv2.VideoWriter_fourcc(*'mp4v'), fps, (width, height))
+writer = cv2.VideoWriter(destination_video_name,
+                         cv2.VideoWriter_fourcc(*'mp4v'), fps, (width, height))
 
 # init for video
 handled_frames = 0
@@ -257,7 +262,7 @@ while True:
         if handled_frames >= output_frames:
             break;
 
-print('\nWork done, total ' + str(handled_frames) + ' frames written to ' + destination_video_name)
+print(f'\nWork done, total {handled_frames} frames written to {destination_video_name}')
 
 writer.release()
 cap.release()
