@@ -103,7 +103,7 @@ def draw_center_face(img, faces):
 
     return None
 
-face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
+#face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
 cap = cv2.VideoCapture(source_video_name)
 
 width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -111,9 +111,6 @@ height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 fps = int(cap.get(cv2.CAP_PROP_FPS))
 fourcc = int(cap.get(cv2.CAP_PROP_FOURCC))
 frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
-handled_frames = 0
-output_frames = -1
 
 print('Source video: ' + source_video_name)
 print('  width  = ' + str(width))
@@ -125,7 +122,12 @@ print('  fourcc = ' + str(fourcc))
 # always use mp4
 writer = cv2.VideoWriter(destination_video_name, cv2.VideoWriter_fourcc(*'mp4v'), fps, (width, height))
 
-detector = dlib.get_frontal_face_detector()
+# init for video
+handled_frames = 0
+output_frames = 30
+
+hog_detector = dlib.get_frontal_face_detector()
+cnn_detector = dlib.cnn_face_detection_model_v1('./mmod_human_face_detector.dat')
 predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
 
 while True:
@@ -134,47 +136,73 @@ while True:
         # no frame to process
         break;
 
-    print('Progress[' + str(handled_frames) + '/' + str(frame_count) + ']', end="\r")
-    #print(f'Processing frame: {handled_frames + 1}')
+    # init for frame
+    frame_state = 'init'
+    use_cnn = True
 
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    while True:
+        if frame_state == 'init':
+            #print('Progress[' + str(handled_frames) + '/' + str(frame_count) + ']', end="\r")
+            print(f'Processing frame: {handled_frames + 1}')
 
-    # get rectangle of front faces
-    faces = detector(gray)
-    faces_num = len(faces)
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            frame_state = 'hog_detect'
+        elif frame_state == 'hog_detect':
+            # get rectangle of front faces
+            faces = hog_detector(gray)
+            faces_num = len(faces)
 
-    if faces_num == 0:
-        #print('no face found')
+            if faces_num == 0:
+                print('no face found by hog detector')
 
-        # next frame
-        writer.write(frame)
-        handled_frames += 1
-        continue
+                if use_cnn != False:
+                    frame_state = 'cnn_detect'
+                else:
+                    frame_state = 'next_frame'
+            else:
+                # we've got some faces
+                frame_state = 'draw_face_rectangles'
+        elif frame_state == 'cnn_detect':
+            # get rectangle of front faces
+            faces = cnn_detector(gray)
+            faces_num = len(faces)
 
-    face = draw_center_face(frame, faces)
-    if face == None:
-        # all faces found are not in the center position
-        #print(f'fail to draw center face\n')
-        #show_the_img(frame)
+            if faces_num == 0:
+                print('no face found by cnn detector')
+                frame_state = 'next_frame'
+            else:
+                # we've got some faces
+                frame_state = 'draw_face_rectangles'
+        elif frame_state == 'draw_face_rectangles':
+            face = draw_center_face(frame, faces)
+            if face == None:
+                # all faces found are not in the center position
+                print('fail to draw center face\n')
+                #show_the_img(frame)
 
-        # next frame
-        writer.write(frame)
-        handled_frames += 1
-        continue
-
-    # get landmarks
-    landmarks = predictor(gray, face)
-    draw_landmarks(frame, landmarks)
+                if use_cnn != False:
+                    frame_state = 'cnn_detect'
+                    use_cnn = False
+                else:
+                    frame_state = 'next_frame'
+            else:
+                frame_state = 'draw_landmarks'
+        elif frame_state == 'draw_landmarks':
+            # get landmarks
+            landmarks = predictor(gray, face)
+            draw_landmarks(frame, landmarks)
+            frame_state = 'next_frame'
+        elif frame_state == 'next_frame':
+            # next frame
+            writer.write(frame)
+            handled_frames += 1
+            break;
 
     #print(str(faces_num) + ' faces found\n')
 
     #height, width, layers = frame.shape
     #size = (width, height)
     #frames_array.append(frame)
-
-    # next frame
-    writer.write(frame)
-    handled_frames += 1
 
     # don't want to process entire video
     if output_frames > 0:
