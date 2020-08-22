@@ -4,6 +4,7 @@ from scipy.spatial import distance as dist
 import csv
 import cv2
 import dlib
+import hashlib
 #import imutils
 import matplotlib.pyplot as plt
 import numpy as np
@@ -17,6 +18,95 @@ def show_the_img(img, caption):
     img_resize = cv2.resize(img, size)
     cv2.imshow(caption, img_resize)
     cv2.waitKey(1)
+
+    return
+
+def get_data_path(directory):
+    if directory == 'root':
+        return './data'
+    elif directory == 'video':
+        return './data/video'
+    elif directory == 'csv':
+        return './data/csv'
+    else:
+        print('get_data_path: unknown directory %s' % (directory))
+
+    # should not get here
+    return ''
+
+def create_data_directory():
+    # create basic layout of data directory
+    print('Check data directory:')
+
+    data_path = get_data_path('root')
+    video_path = get_data_path('video')
+    csv_path = get_data_path('csv')
+
+    abs_data_path = os.path.abspath(data_path)
+    abs_video_path = os.path.abspath(video_path)
+    abs_csv_path = os.path.abspath(csv_path)
+
+    pathes = (abs_data_path, abs_video_path, abs_csv_path)
+
+    for path in pathes:
+        if os.path.isdir(path) == False:
+            try:
+                print('  creating %s' % (path))
+                os.mkdir(path)
+            except OSError:
+                print('  fail to create %s directory' % (path))
+                return False
+
+    return True
+
+def get_md5_digest(path, size):
+    block_size = 4096
+    remain_size = size
+
+    file_hash = hashlib.md5()
+    with open(path, 'rb') as f:
+        while remain_size > block_size:
+            block = f.read(block_size)
+            file_hash.update(block)
+            remain_size -= block_size
+
+        if remain_size != 0:
+            block = f.read(remain_size)
+            file_hash.update(block)
+
+    return file_hash.hexdigest()
+
+def prepare_one_video(input_video_path):
+    if os.path.isfile(input_video_path) == False:
+        print('  file %s does not exist' % (input_video_path))
+        return False, None, None
+
+    # first 64KB should be sufficient
+    file_hash = get_md5_digest(input_video_path, 64 * 1024)
+
+    # remove directory part
+    _, file_name = os.path.split(input_video_path)
+
+    # remove ext part
+    file_name, _ = os.path.splitext(file_name)
+
+    # generate file name of output video and csv file
+    output_video_name = file_name + '-' + str(file_hash) + '.mp4'
+    output_csv_name = file_name + '-' + str(file_hash) + '.csv'
+
+    output_video_path = os.path.join(get_data_path('video'), output_video_name)
+    output_csv_path = os.path.join(get_data_path('csv'), output_csv_name)
+
+    output_video_path = os.path.abspath(output_video_path)
+    output_csv_path = os.path.abspath(output_csv_path)
+
+    if os.path.isfile(output_video_path):
+        print('  video data already exists')
+
+    if os.path.isfile(output_csv_path):
+        print('  csv data already exists')
+
+    return True, output_video_path, output_csv_path
 
 def decode_fourcc(v):
     v = int(v)
@@ -57,6 +147,9 @@ def auto_detect_rotation(video_path, detector):
                     print('  need to rotate %s' % (text[i]))
                 cap.release()
                 return degrees[i]
+
+    # should not get here
+    return -1
 
 def find_biggest_face(faces):
     # init
@@ -128,12 +221,16 @@ def draw_rect(img, rect, color):
     else:
         print('draw_rect: unknown color %s' % (color))
 
+    return
+
 def draw_face_rectangles(img, faces, target):
     for face in faces:
         draw_rect(img, face, 'red')
 
     if target != None:
         draw_rect(img, target, 'green')
+
+    return
 
 def draw_landmarks(img, landmarks, part, marker):
     for n in range(0, 68):
@@ -153,6 +250,8 @@ def draw_landmarks(img, landmarks, part, marker):
                         (255, 0, 0), 1, 8, False);
         else:
             print('draw_landmarks: unknown marker %s' % (marker))
+
+    return
 
 def calculate_ear_value(landmarks, eye):
     if eye == 'left':
@@ -371,7 +470,6 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
             if output_csv_path != None:
                 csv_writer.writerow(frame_result)
 
-
         if output_video_path != None:
             frame = cv2.resize(frame, output_size)
             video_writer.write(frame)
@@ -395,18 +493,28 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
 
     return times, ears
 
+
 def main():
-    input_video_path = './20200528_1AB.mp4' # rotation test
-    #source_video_path = '20200429_2B.mp4'
 
-    root, ext = os.path.splitext(input_video_path)
+    input_video_path = '20200528_1AB.mp4' # rotation test
 
-    output_video_path = root + '-tag.mp4'
-    output_csv_path = root + '.csv'
-
+    # init for all videos
     hog_detector = dlib.get_frontal_face_detector()
     cnn_detector = dlib.cnn_face_detection_model_v1('./mmod_human_face_detector.dat')
     predictor = dlib.shape_predictor('shape_predictor_68_face_landmarks.dat')
+
+    # check data directory
+    if create_data_directory() == False:
+        print('fail to create data directory')
+        return
+
+    # translate to abs path
+    input_video_path = os.path.abspath(input_video_path)
+
+    ret, output_video_path, output_csv_path = prepare_one_video(input_video_path)
+    if ret == False:
+        print('fail to prepare video params')
+        return
 
     times, ears = process_one_video(input_video_path, hog_detector, cnn_detector, predictor,
                                     output_video_path, # None to disable output
