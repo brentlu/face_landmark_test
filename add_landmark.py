@@ -1,6 +1,7 @@
 
 from scipy.spatial import distance as dist
 #from imutils import face_utils
+import csv
 import cv2
 import dlib
 #import imutils
@@ -104,13 +105,13 @@ def find_target_face(img, faces):
             print('find_target_face: fail to find biggest face')
 
         #show_the_img(img, 'Biggest face found')
-        return biggest
+        return biggest, faces_center_num
     elif faces_center_num == 1:
         # unique center face found, draw a green rect on the face
-        return faces_center[0]
+        return faces_center[0], faces_center_num
 
     # all faces are not in the center
-    return None
+    return None, 0
 
 def draw_rect(img, rect, color):
     # draw rectangle
@@ -177,16 +178,17 @@ def calculate_ear_value(landmarks, eye):
 
     return ear
 
-def process_one_frame(frame, hog_detector, cnn_detector, predictor, use_cnn, osd_enable):
+def process_one_frame(frame, hog_detector, cnn_detector, predictor, frame_result, use_cnn, osd_enable):
     # init for frame
-    frame_state = 'init'
-    ret, ear_left, ear_right = False, 0.0, 0.0
+    state = 'init'
 
     while True:
-        if frame_state == 'init':
+        if state == 'init':
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            frame_state = 'hog_detect'
-        elif frame_state == 'hog_detect':
+
+            # first try hog detector
+            state = 'hog_detect'
+        elif state == 'hog_detect':
             # get rectangle of front faces
             faces = hog_detector(gray)
             faces_num = len(faces)
@@ -194,76 +196,94 @@ def process_one_frame(frame, hog_detector, cnn_detector, predictor, use_cnn, osd
             if faces_num == 0:
                 print('process_one_frame: no face found by hog detector')
 
+                # try very slow cnn detector to find more faces
                 if use_cnn != False:
-                    # try very slow cnn detector
-                    frame_state = 'cnn_detect'
-                else:
-                    break;
-            else:
-                # we've got some faces
-                frame_state = 'draw_face_rectangles'
-        elif frame_state == 'cnn_detect':
+                    state = 'cnn_detect'
+                    continue
+
+                return False
+
+            # we've got some faces
+            frame_result['detector'] = 'h'
+            frame_result['total_face_num'] = faces_num
+
+            state = 'process_faces'
+        elif state == 'cnn_detect':
             # get rectangle of front faces
             faces = cnn_detector(gray)
             faces_num = len(faces)
 
             if faces_num == 0:
                 print('process_one_frame: no face found by cnn detector')
-                break;
-            else:
-                # we've got some faces
-                # TODO: fix the rect
-                frame_state = 'draw_face_rectangles'
-        elif frame_state == 'draw_face_rectangles':
-            target = find_target_face(frame, faces)
+                return False
+
+            # we've got some faces
+            # TODO: fix the rect
+            frame_result['detector'] = 'c'
+            frame_result['total_face_num'] = faces_num
+
+            state = 'process_faces'
+        elif state == 'process_faces':
+            # find the target face
+            target, center_num = find_target_face(frame, faces)
+
+            frame_result['center_face_num'] = center_num
 
             if target == None:
                 # all faces found are not in the center position
                 print('process_one_frame: fail to find target face')
-                #show_the_img(frame, 'no center face')
 
+                # try very slow cnn detector to find more faces
                 if use_cnn != False:
-                    frame_state = 'cnn_detect'
                     use_cnn = False
-                else:
-                    if osd_enable != False:
-                        draw_face_rectangles(frame, faces, target)
-                    break;
-            else:
+
+                    state = 'cnn_detect'
+                    continue
+
+                # draw red rectangles before leaving
                 if osd_enable != False:
                     draw_face_rectangles(frame, faces, target)
-                frame_state = 'draw_landmarks'
-        elif frame_state == 'draw_landmarks':
-            # get landmarks
+
+                return False
+
+            frame_result['target_left'] = target.left()
+            frame_result['target_top'] = target.top()
+            frame_result['target_right'] = target.right()
+            frame_result['target_bottom'] = target.bottom()
+
+            if osd_enable != False:
+                draw_face_rectangles(frame, faces, target)
+
+            # get landmarks of the target face
             landmarks = predictor(gray, target)
+
             if osd_enable != False:
                 draw_landmarks(frame, landmarks, 'left-eye', 'circle')
 
-            #show_the_img(frame, 'landmarks drawn')
+            # calculate ear values for both eyes
+            frame_result['ear_left'] = calculate_ear_value(landmarks, 'left')
+            frame_result['ear_right'] = calculate_ear_value(landmarks, 'right')
 
-            frame_state = 'calculate_ear'
-        elif frame_state == 'calculate_ear':
-            # finally everything is done!!
-            ear_left = calculate_ear_value(landmarks, 'left')
-            ear_right = calculate_ear_value(landmarks, 'right')
-            ret = True
-            break;
+            return True
         else:
-            print('process_one_frame: unknown state %s' % (frame_state))
+            print('process_one_frame: unknown state %s' % (state))
+            return False
 
-    return ret, ear_left, ear_right
+    # should not get here
+    return False
 
-def process_one_video(video_path, hog_detector, cnn_detector, predictor, output_path, output_frames):
+def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, output_video_path, output_csv_path, output_frames):
     # init for video
     frame_index = 0
     frame_fail = 0
+    csv_fields = ['index', 'detector', 'total_face_num', 'center_face_num', 'target_left', 'target_top', 'target_right', 'target_bottom', 'time_stamp', 'ear_left', 'ear_right']
     times = []
     ears = []
 
-    cap = cv2.VideoCapture(video_path)
+    cap = cv2.VideoCapture(input_video_path)
 
     if cap.isOpened() == False:
-        print('Fail to open source video %s' % (video_path))
+        print('Fail to open source video %s' % (input_video_path))
         return times, ears
 
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -272,25 +292,30 @@ def process_one_video(video_path, hog_detector, cnn_detector, predictor, output_
     fourcc = int(cap.get(cv2.CAP_PROP_FOURCC))
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-    print('Source video:   %s' % (video_path))
+    print('Source video:   %s' % (input_video_path))
     print('  width       = %d' % (width))
     print('  height      = %d' % (height))
     print('  fps         = %d' % (fps))
     print('  fourcc      = %s' % (decode_fourcc(fourcc)))
     print('  frame_count = %d' % (frame_count))
 
-    rotation = auto_detect_rotation(video_path, hog_detector)
+    rotation = auto_detect_rotation(input_video_path, hog_detector)
 
     if rotation == cv2.ROTATE_90_CLOCKWISE or rotation == cv2.ROTATE_90_COUNTERCLOCKWISE:
         temp = width
         width = height
         height = temp
 
-    if output_path != None:
+    if output_video_path != None:
         # keep the same size and fps
         # always use mp4
-        writer = cv2.VideoWriter(output_path, cv2.VideoWriter_fourcc(*'mp4v'),
-                                 fps, (width, height))
+        video_writer = cv2.VideoWriter(output_video_path, cv2.VideoWriter_fourcc(*'mp4v'),
+                                       fps, (width, height))
+
+    if output_csv_path != None:
+        csvfile = open(output_csv_path, 'w', newline='')
+        csv_writer = csv.DictWriter(csvfile, fieldnames = csv_fields)
+        csv_writer.writeheader()
 
     while True:
         ret, frame = cap.read()
@@ -298,40 +323,66 @@ def process_one_video(video_path, hog_detector, cnn_detector, predictor, output_
             # no frame to process
             break;
 
+        # prepare an empty dict
+        frame_result = {
+            'index': 0,
+            'detector': 'h', # 'h' for hog and 'c' for cnn
+            'total_face_num' : 0,
+            'center_face_num' : 0,
+            'target_left' : 0,
+            'target_top' : 0,
+            'target_right' : 0,
+            'target_bottom' : 0,
+            'time_stamp' : 0.0,
+            'ear_left': 0.0,
+            'ear_right': 0.0,
+        }
+
         frame_index += 1
+        frame_result['index'] = frame_index
 
         print('Processing frame: %d / %d: ' % (frame_index, frame_count), end = '')
 
         if rotation != -1:
             frame = cv2.rotate(frame, rotation)
 
-        ret, ear_left, ear_right = \
-            process_one_frame(frame, hog_detector, cnn_detector, predictor,
-                              False, # try again with cnn if hog fails
-                              output_path != None) # draw osd info on the frame
+        ret = process_one_frame(frame, hog_detector, cnn_detector, predictor, frame_result,
+                                False, # try again with cnn if hog fails
+                                output_video_path != None) # draw osd info on the frame
         if ret == False:
             show_the_img(frame, 'Failed Frame')
             frame_fail += 1
         else:
             time_stamp = frame_index / fps
-            times.append(time_stamp)
-            ears.append(ear_left)
-            print('ts: %4.3f, ear: (%4.3f, %4.3f)' % (time_stamp, ear_left, ear_right))
+            frame_result['time_stamp'] = time_stamp
 
-        if output_path != None:
-            writer.write(frame)
+            times.append(time_stamp)
+            ears.append(frame_result['ear_left'])
+            print('ts: %4.3f, ear: (%4.3f, %4.3f)' % (time_stamp, frame_result['ear_left'], frame_result['ear_right']))
+
+            if output_csv_path != None:
+                csv_writer.writerow(frame_result)
+
+
+        if output_video_path != None:
+            video_writer.write(frame)
 
         # don't want to process entire video
         if output_frames > 0:
             if frame_index >= output_frames:
                 break;
 
-    print('Video done, %d frames written to %s' % (frame_index, output_path))
+    if output_video_path != None:
+        print('Video done, %d frames written to %s' % (frame_index, output_video_path))
+    else:
+        print('Video done, %d frames' % (frame_index))
     print('  %d frames (%3.2f%%) failed to process' % (frame_fail, frame_fail * 100.0 / frame_count))
 
     # clean-up
-    if output_path != None:
-        writer.release()
+    if output_video_path != None:
+        video_writer.release()
+    if output_csv_path != None:
+        csvfile.close()
     cap.release()
 
     return times, ears
@@ -340,20 +391,22 @@ def main():
     source_video_path = '20200528_1AB.mp4' # rotation test
     #source_video_path = '20200429_2B.mp4'
     destination_video_path = 'test.mp4'
+    data_csv_path = 'test.csv'
 
     hog_detector = dlib.get_frontal_face_detector()
     cnn_detector = dlib.cnn_face_detection_model_v1('./mmod_human_face_detector.dat')
-    predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
+    predictor = dlib.shape_predictor('shape_predictor_68_face_landmarks.dat')
 
     times, ears = process_one_video(source_video_path, hog_detector, cnn_detector, predictor,
                                     destination_video_path, # None to disable output
+                                    data_csv_path,
                                     -1)                     # -1 to process all frames
 
     if len(times) != 0:
-        plt.plot(times, ears, "r--")
-        plt.title("EAR-time", fontsize = 20)
-        plt.xlabel("time", fontsize = 12)
-        plt.ylabel("EAR", fontsize = 12)
+        plt.plot(times, ears, 'r--')
+        plt.title('EAR-time', fontsize = 20)
+        plt.xlabel('time', fontsize = 12)
+        plt.ylabel('EAR', fontsize = 12)
 
         plt.show()
 
