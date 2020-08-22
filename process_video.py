@@ -7,6 +7,7 @@ import dlib
 #import imutils
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 
 
 def show_the_img(img, caption):
@@ -23,7 +24,7 @@ def decode_fourcc(v):
 
 def auto_detect_rotation(video_path, detector):
     degrees = [-1, cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_180, cv2.ROTATE_90_COUNTERCLOCKWISE]
-    text = ['none', '90c', '180', '90cc']
+    text = ['none', '90 degree clockwise', '180 degree', '90 degree counter clockwise']
     counts = [0, 0, 0, 0]
 
     cap = cv2.VideoCapture(video_path)
@@ -52,7 +53,8 @@ def auto_detect_rotation(video_path, detector):
 
             if counts[i] >= 5:
                 if degrees[i] != -1:
-                    print('Rotation detected: need to rotate %s' % (text[i]))
+                    print('Auto-rotation info:')
+                    print('  need to rotate %s' % (text[i]))
                 cap.release()
                 return degrees[i]
 
@@ -275,7 +277,7 @@ def process_one_frame(frame, hog_detector, cnn_detector, predictor, frame_result
 def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, output_video_path, output_csv_path, output_frames):
     # init for video
     frame_index = 0
-    frame_fail = 0
+    frame_fail_count = 0
     csv_fields = ['index', 'detector', 'total_face_num', 'center_face_num', 'target_left', 'target_top', 'target_right', 'target_bottom', 'time_stamp', 'ear_left', 'ear_right']
     times = []
     ears = []
@@ -292,7 +294,11 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
     fourcc = int(cap.get(cv2.CAP_PROP_FOURCC))
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-    print('Source video:   %s' % (input_video_path))
+    print('Path info:')
+    print('  input video  = %s' % (input_video_path))
+    print('  output video = %s' % (output_video_path))
+    print('  output csv   = %s' % (output_csv_path))
+    print('Input video info:')
     print('  width       = %d' % (width))
     print('  height      = %d' % (height))
     print('  fps         = %d' % (fps))
@@ -307,15 +313,17 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
         height = temp
 
     if output_video_path != None:
-        # keep the same size and fps
         # always use mp4
+        output_size = (int(width / 4), int(height / 4))
         video_writer = cv2.VideoWriter(output_video_path, cv2.VideoWriter_fourcc(*'mp4v'),
-                                       fps, (width, height))
+                                       fps, output_size)
 
     if output_csv_path != None:
         csvfile = open(output_csv_path, 'w', newline='')
         csv_writer = csv.DictWriter(csvfile, fieldnames = csv_fields)
         csv_writer.writeheader()
+
+    print('Processing video:')
 
     while True:
         ret, frame = cap.read()
@@ -341,7 +349,7 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
         frame_index += 1
         frame_result['index'] = frame_index
 
-        print('Processing frame: %d / %d: ' % (frame_index, frame_count), end = '')
+        print('  frame: (%3d/%d), ' % (frame_index, frame_count), end = '')
 
         if rotation != -1:
             frame = cv2.rotate(frame, rotation)
@@ -351,20 +359,21 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
                                 output_video_path != None) # draw osd info on the frame
         if ret == False:
             show_the_img(frame, 'Failed Frame')
-            frame_fail += 1
+            frame_fail_count += 1
         else:
             time_stamp = frame_index / fps
             frame_result['time_stamp'] = time_stamp
 
             times.append(time_stamp)
             ears.append(frame_result['ear_left'])
-            print('ts: %4.3f, ear: (%4.3f, %4.3f)' % (time_stamp, frame_result['ear_left'], frame_result['ear_right']))
+            print('ts: %4.3f, ear: (%4.3f,%4.3f)' % (time_stamp, frame_result['ear_left'], frame_result['ear_right']))
 
             if output_csv_path != None:
                 csv_writer.writerow(frame_result)
 
 
         if output_video_path != None:
+            frame = cv2.resize(frame, output_size)
             video_writer.write(frame)
 
         # don't want to process entire video
@@ -372,11 +381,10 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
             if frame_index >= output_frames:
                 break;
 
-    if output_video_path != None:
-        print('Video done, %d frames written to %s' % (frame_index, output_video_path))
-    else:
-        print('Video done, %d frames' % (frame_index))
-    print('  %d frames (%3.2f%%) failed to process' % (frame_fail, frame_fail * 100.0 / frame_count))
+    print('Statistic info:')
+    print('  total %d frames' % (frame_count))
+    print('  %d frames processed' % (frame_index))
+    print('  %d frames (%3.2f%%) failed' % (frame_fail_count, frame_fail_count * 100.0 / frame_index))
 
     # clean-up
     if output_video_path != None:
@@ -388,20 +396,24 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
     return times, ears
 
 def main():
-    source_video_path = '20200528_1AB.mp4' # rotation test
+    input_video_path = './20200528_1AB.mp4' # rotation test
     #source_video_path = '20200429_2B.mp4'
-    destination_video_path = 'test.mp4'
-    data_csv_path = 'test.csv'
+
+    root, ext = os.path.splitext(input_video_path)
+
+    output_video_path = root + '-tag.mp4'
+    output_csv_path = root + '.csv'
 
     hog_detector = dlib.get_frontal_face_detector()
     cnn_detector = dlib.cnn_face_detection_model_v1('./mmod_human_face_detector.dat')
     predictor = dlib.shape_predictor('shape_predictor_68_face_landmarks.dat')
 
-    times, ears = process_one_video(source_video_path, hog_detector, cnn_detector, predictor,
-                                    destination_video_path, # None to disable output
-                                    data_csv_path,
-                                    -1)                     # -1 to process all frames
+    times, ears = process_one_video(input_video_path, hog_detector, cnn_detector, predictor,
+                                    output_video_path, # None to disable output
+                                    output_csv_path,
+                                    -1)                # -1 to process all frames
 
+    return
     if len(times) != 0:
         plt.plot(times, ears, 'r--')
         plt.title('EAR-time', fontsize = 20)
