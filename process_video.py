@@ -29,6 +29,8 @@ def logger_start():
     global logger_started
     global logger_file
 
+    logger_print('Start logger:')
+
     # get current time
     now = time.gmtime()
 
@@ -44,6 +46,8 @@ def logger_start():
 
     logger_file = open(log_path, 'w')
     logger_started = 1
+
+    logger_print('  log path = %s' % (log_path))
 
     return
 
@@ -71,19 +75,19 @@ def logger_stop():
 def get_data_path(directory):
     if directory == 'data':
         return './data'
-    elif directory == 'video':
-        return './data/video'
     elif directory == 'csv':
         return './data/csv'
     elif directory == 'log':
         return './data/log'
+    elif directory == 'video':
+        return './data/video'
     else:
         logger_print('get_data_path: unknown directory %s' % (directory))
 
     # should not get here
     return ''
 
-def create_data_directory():
+def check_data_directory():
     # create basic layout of data directory
     logger_print('Check data directory:')
 
@@ -104,12 +108,13 @@ def create_data_directory():
     for path in pathes:
         if os.path.isdir(path) == False:
             try:
-                logger_print('  creating %s' % (path))
+                logger_print('  create %s directory' % (path))
                 os.mkdir(path)
             except OSError:
                 logger_print('  fail to create %s directory' % (path))
                 return False
 
+    logger_print('  all good')
     return True
 
 def get_md5_digest(path, size):
@@ -140,16 +145,21 @@ def get_process_parameters(input_video_path):
     file_name, _ = os.path.splitext(file_name)
 
     # generate file name of output video and csv file
-    output_video_name = file_name + '-' + str(file_hash) + '.mp4'
-    output_csv_name = file_name + '-' + str(file_hash) + '.csv'
+    output_csv_name = '%s-%s.csv' % (file_name, str(file_hash))
+    output_video_name = '%s-%s.mp4' % (file_name, str(file_hash))
 
-    output_video_path = os.path.join(get_data_path('video'), output_video_name)
     output_csv_path = os.path.join(get_data_path('csv'), output_csv_name)
+    output_video_path = os.path.join(get_data_path('video'), output_video_name)
 
-    output_video_path = os.path.abspath(output_video_path)
     output_csv_path = os.path.abspath(output_csv_path)
+    output_video_path = os.path.abspath(output_video_path)
 
-    return output_video_path, output_csv_path
+    logger_print('Get process parameters:')
+    logger_print('  input video path  = %s' % (input_video_path))
+    logger_print('  output csv path   = %s' % (output_csv_path))
+    logger_print('  output video path = %s' % (output_video_path))
+
+    return output_csv_path, output_video_path
 
 def decode_fourcc(v):
     v = int(v)
@@ -173,21 +183,18 @@ def auto_detect_rotation(video_path, detector):
         for i in range(len(degrees)):
             if degrees[i] != -1:
                 rotate = cv2.rotate(gray, degrees[i])
-                #show_the_img(frame_rotate, f'Degree index {i}')
                 faces = detector(rotate)
             else:
-                #show_the_img(frame, 'no rotation')
                 faces = detector(gray)
 
             faces_num = len(faces)
             if faces_num != 0:
                 counts[i] += faces_num
-                #logger_print('auto_detect_rotation: %d faces found for index %d' % (faces_num, i))
+                #logger_print('auto_detect_rotation: %d faces found for %s' % (faces_num, text[i]))
 
             if counts[i] >= 5:
-                if degrees[i] != -1:
-                    logger_print('Auto-rotation info:')
-                    logger_print('  need to rotate %s' % (text[i]))
+                logger_print('  orientation detection:')
+                logger_print('    need to rotate %s' % (text[i]))
                 cap.release()
                 return degrees[i]
 
@@ -235,14 +242,11 @@ def find_target_face(img, faces):
 
     if faces_center_num > 1:
         # more than one face in the center, select the biggest one
-        #logger_print('find_target_face: more than one face in the center')
-
         biggest = find_biggest_face(faces_center)
         if biggest == None:
             # should never happen
             logger_print('find_target_face: fail to find biggest face')
 
-        #show_the_img(img, 'Biggest face found')
         return biggest, faces_center_num
     elif faces_center_num == 1:
         # unique center face found, draw a green rect on the face
@@ -424,10 +428,12 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
     times = []
     ears = []
 
+    logger_print('Process video:')
+
     cap = cv2.VideoCapture(input_video_path)
 
     if cap.isOpened() == False:
-        logger_print('Fail to open source video %s' % (input_video_path))
+        logger_print('  fail to open %s' % (input_video_path))
         return times, ears
 
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -436,16 +442,12 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
     fourcc = int(cap.get(cv2.CAP_PROP_FOURCC))
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-    logger_print('Path info:')
-    logger_print('  input video  = %s' % (input_video_path))
-    logger_print('  output video = %s' % (output_video_path))
-    logger_print('  output csv   = %s' % (output_csv_path))
-    logger_print('Input video info:')
-    logger_print('  width       = %d' % (width))
-    logger_print('  height      = %d' % (height))
-    logger_print('  fps         = %d' % (fps))
-    logger_print('  fourcc      = %s' % (decode_fourcc(fourcc)))
-    logger_print('  frame_count = %d' % (frame_count))
+    logger_print('  video property:')
+    logger_print('    width       = %d' % (width))
+    logger_print('    height      = %d' % (height))
+    logger_print('    fps         = %d' % (fps))
+    logger_print('    fourcc      = %s' % (decode_fourcc(fourcc)))
+    logger_print('    frame_count = %d' % (frame_count))
 
     rotation = auto_detect_rotation(input_video_path, hog_detector)
 
@@ -464,8 +466,6 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
         csvfile = open(output_csv_path, 'w', newline='')
         csv_writer = csv.DictWriter(csvfile, fieldnames = csv_fields)
         csv_writer.writeheader()
-
-    logger_print('Processing video:')
 
     while True:
         ret, frame = cap.read()
@@ -500,7 +500,6 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
                                 False, # try again with cnn if hog fails
                                 output_video_path != None) # draw osd info on the frame
         if ret == False:
-            show_the_img(frame, 'Failed Frame')
             frame_fail_count += 1
         else:
             time_stamp = frame_index / fps
@@ -522,7 +521,7 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
             if frame_index >= output_frames:
                 break;
 
-    logger_print('Statistic info:')
+    logger_print('Statistic:')
     logger_print('  total %d frames' % (frame_count))
     logger_print('  %d frames processed' % (frame_index))
     logger_print('  %d frames (%3.2f%%) failed' % (frame_fail_count, frame_fail_count * 100.0 / frame_index))
@@ -546,8 +545,8 @@ def main():
     predictor = dlib.shape_predictor('shape_predictor_68_face_landmarks.dat')
 
     # check data directory
-    if create_data_directory() == False:
-        logger_print('fail to create data directory')
+    if check_data_directory() == False:
+        logger_print('  fail to check data directory')
         return
 
     # start the logger
@@ -557,20 +556,20 @@ def main():
     input_video_path = os.path.abspath(input_video_path)
 
     if os.path.isfile(input_video_path) != False:
+        output_csv_path, output_video_path = get_process_parameters(input_video_path)
 
-        output_video_path, output_csv_path = get_process_parameters(input_video_path)
+        logger_print('Check existing data:')
 
         if os.path.isfile(output_video_path):
-            logger_print('  video data already exists')
+            logger_print('  video data will be overwritten')
 
         if os.path.isfile(output_csv_path):
-            logger_print('  csv data already exists')
+            logger_print('  csv data will be overwritten')
 
         times, ears = process_one_video(input_video_path, hog_detector, cnn_detector, predictor,
                                         output_video_path, # None to disable output
                                         output_csv_path,
                                         -1)                # -1 to process all frames
-
     elif os.path.isdir(input_video_path):
 
         mime = magic.Magic(mime=True)
@@ -580,23 +579,22 @@ def main():
 
                 file = mime.from_file(file_path)
                 if file.find('video') != -1:
-                    logger_print('video found: %s' % (file_path))
+                    output_csv_path, output_video_path = get_process_parameters(file_path)
 
-                    output_video_path, output_csv_path = get_process_parameters(file_path)
+                    logger_print('Check existing data:')
 
                     if os.path.isfile(output_video_path):
-                        logger_print('  video data already exists')
+                        logger_print('  video data will be overwritten')
 
                     if os.path.isfile(output_csv_path):
-                        logger_print('  csv data already exists')
+                        logger_print('  csv data will be overwritten')
 
                     times, ears = process_one_video(file_path, hog_detector, cnn_detector, predictor,
                                                     output_video_path, # None to disable output
                                                     output_csv_path,
                                                     -1)                # -1 to process all frames
-
     else:
-        logger_print('unknown path %s' % (input_video_path))
+        logger_print('Input path %s could not be handled' % (input_video_path))
 
     # stop the logger
     logger_stop()
