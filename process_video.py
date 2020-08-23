@@ -6,6 +6,7 @@ import cv2
 import dlib
 import hashlib
 #import imutils
+import magic
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -76,11 +77,7 @@ def get_md5_digest(path, size):
 
     return file_hash.hexdigest()
 
-def prepare_one_video(input_video_path):
-    if os.path.isfile(input_video_path) == False:
-        print('  file %s does not exist' % (input_video_path))
-        return False, None, None
-
+def get_process_parameters(input_video_path):
     # first 64KB should be sufficient
     file_hash = get_md5_digest(input_video_path, 64 * 1024)
 
@@ -100,13 +97,7 @@ def prepare_one_video(input_video_path):
     output_video_path = os.path.abspath(output_video_path)
     output_csv_path = os.path.abspath(output_csv_path)
 
-    if os.path.isfile(output_video_path):
-        print('  video data already exists')
-
-    if os.path.isfile(output_csv_path):
-        print('  csv data already exists')
-
-    return True, output_video_path, output_csv_path
+    return output_video_path, output_csv_path
 
 def decode_fourcc(v):
     v = int(v)
@@ -493,9 +484,8 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
 
     return times, ears
 
-
 def main():
-
+    #input_video_path = '.'
     input_video_path = '20200528_1AB.mp4' # rotation test
 
     # init for all videos
@@ -511,15 +501,47 @@ def main():
     # translate to abs path
     input_video_path = os.path.abspath(input_video_path)
 
-    ret, output_video_path, output_csv_path = prepare_one_video(input_video_path)
-    if ret == False:
-        print('fail to prepare video params')
-        return
+    if os.path.isfile(input_video_path) != False:
 
-    times, ears = process_one_video(input_video_path, hog_detector, cnn_detector, predictor,
-                                    output_video_path, # None to disable output
-                                    output_csv_path,
-                                    -1)                # -1 to process all frames
+        output_video_path, output_csv_path = get_process_parameters(input_video_path)
+
+        if os.path.isfile(output_video_path):
+            print('  video data already exists')
+
+        if os.path.isfile(output_csv_path):
+            print('  csv data already exists')
+
+        times, ears = process_one_video(input_video_path, hog_detector, cnn_detector, predictor,
+                                        output_video_path, # None to disable output
+                                        output_csv_path,
+                                        -1)                # -1 to process all frames
+
+    elif os.path.isdir(input_video_path):
+
+        mime = magic.Magic(mime=True)
+        for root, dirs, files in os.walk(input_video_path):
+            for file in files:
+                file_path = os.path.join(root, file)
+
+                file = mime.from_file(file_path)
+                if file.find('video') != -1:
+                    print('video found: %s' % (file_path))
+
+                    output_video_path, output_csv_path = get_process_parameters(file_path)
+
+                    if os.path.isfile(output_video_path):
+                        print('  video data already exists')
+
+                    if os.path.isfile(output_csv_path):
+                        print('  csv data already exists')
+
+                    times, ears = process_one_video(file_path, hog_detector, cnn_detector, predictor,
+                                                    output_video_path, # None to disable output
+                                                    output_csv_path,
+                                                    -1)                # -1 to process all frames
+
+    else:
+        print('unknown path %s' % (input_video_path))
 
     return
     if len(times) != 0:
