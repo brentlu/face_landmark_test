@@ -396,8 +396,9 @@ def process_one_frame(frame, hog_detector, cnn_detector, predictor, frame_result
     # should not get here
     return False
 
-def process_one_video_internal(input_video_path, hog_detector, cnn_detector, predictor, output_video_path, output_csv_path, options):
+def process_one_video_internal(input_video_path, input_csv_path, hog_detector, cnn_detector, predictor, output_video_path, output_csv_path, options):
     # init for video
+    csv_index = 0
     frame_index = 0
     frame_fail_count = 0
     csv_fields = ['index', 'detector', 'total_face_num', 'center_face_num', 'target_left', 'target_top', 'target_right', 'target_bottom', 'time_stamp', 'ear_left', 'ear_right']
@@ -435,9 +436,19 @@ def process_one_video_internal(input_video_path, hog_detector, cnn_detector, pre
         video_writer = cv2.VideoWriter(output_video_path, cv2.VideoWriter_fourcc(*'mp4v'),
                                        fps, (width, height))
 
+    if options['input_csv'] != False:
+        csv_file_read = open(input_csv_path, 'r', newline = '')
+        csv_reader = csv.DictReader(csv_file_read)
+
+        try:
+            row = next(csv_reader)
+            csv_index = int(row['index'])
+        except StopIteration:
+            csv_index = frame_count + 1
+
     if options['output_csv'] != False:
-        csvfile = open(output_csv_path, 'w', newline='')
-        csv_writer = csv.DictWriter(csvfile, fieldnames = csv_fields)
+        csv_file_write = open(output_csv_path, 'w', newline='')
+        csv_writer = csv.DictWriter(csv_file_write, fieldnames = csv_fields)
         csv_writer.writeheader()
 
     while True:
@@ -465,6 +476,19 @@ def process_one_video_internal(input_video_path, hog_detector, cnn_detector, pre
         frame_result['index'] = frame_index
 
         logger_print('  frame: (%3d/%d), ' % (frame_index, frame_count), end = '')
+
+        if options['input_csv'] != False:
+            if frame_index == csv_index:
+                # copy dict entry
+                logger_print('ts: %4.3f, ear: (%4.3f,%4.3f), copy' % (float(row['time_stamp']), float(row['ear_left']), float(row['ear_right'])))
+                if options['output_csv'] != False:
+                    csv_writer.writerow(row)
+                try:
+                    row = next(csv_reader)
+                    csv_index = int(row['index'])
+                except StopIteration:
+                    csv_index = frame_count + 1
+                continue
 
         if rotation != -1:
             frame = cv2.rotate(frame, rotation)
@@ -497,8 +521,10 @@ def process_one_video_internal(input_video_path, hog_detector, cnn_detector, pre
     # clean-up
     if options['output_video'] != False:
         video_writer.release()
+    if options['input_csv'] != False:
+        csv_file_read.close()
     if options['output_csv'] != False:
-        csvfile.close()
+        csv_file_write.close()
     cap.release()
 
     return True
@@ -566,7 +592,23 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
             if options['overwrite'] == False:
                 logger_print('  csv data exists, abort')
                 return False
-            logger_print('  csv data will be overwritten')
+
+            # partial update csv file
+            logger_print('  csv data will be updated')
+
+            if options['output_video'] != False:
+                options['output_video'] = False
+                logger_print('  video data will not be generated')
+
+            directory, _ = os.path.split(output_csv_path)
+            input_csv_path = os.path.join(directory, 'tmp.csv')
+
+            # delete the tmp csv if already exist
+            if os.path.exists(input_csv_path):
+                os.remove(input_csv_path)
+
+            os.rename(r'%s' % output_csv_path, r'%s' % input_csv_path)
+            options['input_csv'] = True
     else:
         output_csv_path = None
 
@@ -585,8 +627,9 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
     else:
         output_video_path = None
 
-    ret = process_one_video_internal(input_video_path, hog_detector, cnn_detector,
-                                     predictor, output_video_path, output_csv_path,
+    ret = process_one_video_internal(input_video_path, input_csv_path,
+                                     hog_detector, cnn_detector, predictor,
+                                     output_video_path, output_csv_path,
                                      options)
     if ret != False and \
        options['output_video'] != False and options['compress_video'] != False:
@@ -597,6 +640,9 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
     else:
         logger_print('Success to process video file %s\n' % (input_video_path))
 
+    if options['input_csv'] != False:
+        os.remove(input_csv_path)
+
     return ret
 
 
@@ -605,10 +651,8 @@ def main():
     input_video_path = '/media/Temp_AIpose20200528/SJCAM/20200528_11AB.mp4'
     #input_video_path = '20200528_1AB.mp4' # rotation test
 
-    # init for all videos
-    hog_detector = dlib.get_frontal_face_detector()
-    cnn_detector = dlib.cnn_face_detection_model_v1('./mmod_human_face_detector.dat')
-    predictor = dlib.shape_predictor('shape_predictor_68_face_landmarks.dat')
+    # translate to abs path
+    input_video_path = os.path.abspath(input_video_path)
 
     # check data directory
     if check_data_directory() == False:
@@ -618,8 +662,10 @@ def main():
     # start the logger
     logger_start()
 
-    # translate to abs path
-    input_video_path = os.path.abspath(input_video_path)
+    # init for all videos
+    hog_detector = dlib.get_frontal_face_detector()
+    cnn_detector = dlib.cnn_face_detection_model_v1('./mmod_human_face_detector.dat')
+    predictor = dlib.shape_predictor('shape_predictor_68_face_landmarks.dat')
 
     logger_print('')
 
@@ -634,6 +680,9 @@ def main():
             'frame_index_max': -1,
             'use_cnn_when_fail': False,
             'compress_video': False,
+
+            # internal use
+            'input_csv': False,
         }
 
         ret = process_one_video(input_video_path, hog_detector, cnn_detector, predictor, options)
@@ -658,6 +707,9 @@ def main():
                     'frame_index_max': -1,
                     'use_cnn_when_fail': False,
                     'compress_video': False,
+
+                    # internal use
+                    'input_csv': False,
                 }
 
                 ret = process_one_video(file_path, hog_detector, cnn_detector, predictor, options)
@@ -671,7 +723,7 @@ def main():
     return
 
 def get_csv_data_file(video_path):
-    # abs path
+    # translate to abs path
     video_path = os.path.abspath(video_path)
 
     file_hash = calculate_md5_digest(video_path, 64 * 1024)
@@ -700,12 +752,25 @@ def get_csv_data_file(video_path):
         'compress_video': False,
     }
 
+    # check data directory
+    if check_data_directory() == False:
+        return None
+
+    # start the logger
+    logger_start()
+
     # init for video
     hog_detector = dlib.get_frontal_face_detector()
     cnn_detector = dlib.cnn_face_detection_model_v1('./mmod_human_face_detector.dat')
     predictor = dlib.shape_predictor('shape_predictor_68_face_landmarks.dat')
 
+    logger_print('')
+
     ret = process_one_video(video_path, hog_detector, cnn_detector, predictor, options)
+
+    # stop the logger
+    logger_stop()
+
     if ret == False:
         return None
 
