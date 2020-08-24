@@ -135,33 +135,6 @@ def get_md5_digest(path, size):
 
     return file_hash.hexdigest()
 
-def get_process_parameters(input_video_path):
-    # first 64KB should be sufficient
-    file_hash = get_md5_digest(input_video_path, 64 * 1024)
-
-    # remove directory part
-    _, file_name = os.path.split(input_video_path)
-
-    # remove ext part
-    file_name, _ = os.path.splitext(file_name)
-
-    # generate file name of output video and csv file
-    output_csv_name = '%s-%s.csv' % (file_name, str(file_hash))
-    output_video_name = '%s-%s.mp4' % (file_name, str(file_hash))
-
-    output_csv_path = os.path.join(get_data_path('csv'), output_csv_name)
-    output_video_path = os.path.join(get_data_path('video'), output_video_name)
-
-    output_csv_path = os.path.abspath(output_csv_path)
-    output_video_path = os.path.abspath(output_video_path)
-
-    logger_print('Get process parameters:')
-    logger_print('  input video path  = %s' % (input_video_path))
-    logger_print('  output csv path   = %s' % (output_csv_path))
-    logger_print('  output video path = %s' % (output_video_path))
-
-    return output_csv_path, output_video_path
-
 def decode_fourcc(v):
     v = int(v)
     return "".join([chr((v >> 8 * i) & 0xFF) for i in range(4)])
@@ -328,9 +301,10 @@ def calculate_ear_value(landmarks, eye):
 
     return ear
 
-def process_one_frame(frame, hog_detector, cnn_detector, predictor, frame_result, use_cnn, osd_enable):
+def process_one_frame(frame, hog_detector, cnn_detector, predictor, frame_result, options):
     # init for frame
     state = 'init'
+    use_cnn = options['use_cnn_when_fail']
 
     while True:
         if state == 'init':
@@ -401,13 +375,13 @@ def process_one_frame(frame, hog_detector, cnn_detector, predictor, frame_result
             frame_result['target_right'] = target.right()
             frame_result['target_bottom'] = target.bottom()
 
-            if osd_enable != False:
+            if options['output_video'] != False:
                 draw_face_rectangles(frame, faces, target)
 
             # get landmarks of the target face
             landmarks = predictor(gray, target)
 
-            if osd_enable != False:
+            if options['output_video'] != False:
                 draw_landmarks(frame, landmarks, 'left-eye', 'circle')
 
             # calculate ear values for both eyes
@@ -422,13 +396,11 @@ def process_one_frame(frame, hog_detector, cnn_detector, predictor, frame_result
     # should not get here
     return False
 
-def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, output_video_path, output_csv_path, output_frames):
+def process_one_video_internal(input_video_path, hog_detector, cnn_detector, predictor, output_video_path, output_csv_path, options):
     # init for video
     frame_index = 0
     frame_fail_count = 0
     csv_fields = ['index', 'detector', 'total_face_num', 'center_face_num', 'target_left', 'target_top', 'target_right', 'target_bottom', 'time_stamp', 'ear_left', 'ear_right']
-    times = []
-    ears = []
 
     logger_print('Process video:')
 
@@ -436,7 +408,7 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
 
     if cap.isOpened() == False:
         logger_print('  fail to open %s' % (input_video_path))
-        return times, ears
+        return False
 
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -458,12 +430,12 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
         width = height
         height = temp
 
-    if output_video_path != None:
+    if options['output_video'] != False:
         # always use mp4
         video_writer = cv2.VideoWriter(output_video_path, cv2.VideoWriter_fourcc(*'mp4v'),
                                        fps, (width, height))
 
-    if output_csv_path != None:
+    if options['output_csv'] != False:
         csvfile = open(output_csv_path, 'w', newline='')
         csv_writer = csv.DictWriter(csvfile, fieldnames = csv_fields)
         csv_writer.writeheader()
@@ -478,13 +450,13 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
         frame_result = {
             'index': 0,
             'detector': 'h', # 'h' for hog and 'c' for cnn
-            'total_face_num' : 0,
-            'center_face_num' : 0,
-            'target_left' : 0,
-            'target_top' : 0,
-            'target_right' : 0,
-            'target_bottom' : 0,
-            'time_stamp' : 0.0,
+            'total_face_num': 0,
+            'center_face_num': 0,
+            'target_left': 0,
+            'target_top': 0,
+            'target_right': 0,
+            'target_bottom': 0,
+            'time_stamp': 0.0,
             'ear_left': 0.0,
             'ear_right': 0.0,
         }
@@ -497,28 +469,24 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
         if rotation != -1:
             frame = cv2.rotate(frame, rotation)
 
-        ret = process_one_frame(frame, hog_detector, cnn_detector, predictor, frame_result,
-                                False, # try again with cnn if hog fails
-                                output_video_path != None) # draw osd info on the frame
+        ret = process_one_frame(frame, hog_detector, cnn_detector, predictor, frame_result, options)
         if ret == False:
             frame_fail_count += 1
         else:
             time_stamp = frame_index / fps
             frame_result['time_stamp'] = time_stamp
 
-            times.append(time_stamp)
-            ears.append(frame_result['ear_left'])
             logger_print('ts: %4.3f, ear: (%4.3f,%4.3f)' % (time_stamp, frame_result['ear_left'], frame_result['ear_right']))
 
-            if output_csv_path != None:
+            if options['output_csv'] != False:
                 csv_writer.writerow(frame_result)
 
-        if output_video_path != None:
+        if options['output_video'] != False:
             video_writer.write(frame)
 
         # don't want to process entire video
-        if output_frames > 0:
-            if frame_index >= output_frames:
+        if options['frame_index_max'] > 0:
+            if frame_index >= options['frame_index_max']:
                 break;
 
     logger_print('Statistic:')
@@ -527,16 +495,15 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
     logger_print('  %d frames (%3.2f%%) failed' % (frame_fail_count, frame_fail_count * 100.0 / frame_index))
 
     # clean-up
-    if output_video_path != None:
+    if options['output_video'] != False:
         video_writer.release()
-    if output_csv_path != None:
+    if options['output_csv'] != False:
         csvfile.close()
     cap.release()
 
-    return times, ears
+    return True
 
 def compress_one_video(output_video_path):
-
     directory, _ = os.path.split(output_video_path)
     tmp_video_path = os.path.join(directory, 'tmp.mp4')
 
@@ -572,6 +539,62 @@ def compress_one_video(output_video_path):
 
     return True
 
+def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, options):
+    # first 64KB should be sufficient
+    file_hash = get_md5_digest(input_video_path, 64 * 1024)
+
+    # remove directory part
+    _, file_name = os.path.split(input_video_path)
+
+    # remove ext part
+    file_name, _ = os.path.splitext(file_name)
+
+    logger_print('Check process parameters:')
+    logger_print('  input video path  = %s' % (input_video_path))
+
+    # generate file name of output video and csv file
+    if options['output_csv'] != False:
+        output_csv_name = '%s-%s.csv' % (file_name, str(file_hash))
+        output_csv_path = os.path.join(get_data_path('csv'), output_csv_name)
+        output_csv_path = os.path.abspath(output_csv_path)
+
+        logger_print('  output csv path   = %s' % (output_csv_path))
+
+        if os.path.isfile(output_csv_path) != False:
+            if options['overwrite'] == False:
+                logger_print('  csv data exists, abort')
+                return False
+            logger_print('  csv data will be overwritten')
+    else:
+        output_csv_path = None
+
+    if options['output_video'] != False:
+        output_video_name = '%s-%s.mp4' % (file_name, str(file_hash))
+        output_video_path = os.path.join(get_data_path('video'), output_video_name)
+        output_video_path = os.path.abspath(output_video_path)
+
+        logger_print('  output video path = %s' % (output_video_path))
+
+        if os.path.isfile(output_video_path) != False:
+            if options['overwrite'] == False:
+                logger_print('  video data exists, abort')
+                return False
+            logger_print('  video data will be overwritten')
+    else:
+        output_video_path = None
+
+    ret = process_one_video_internal(input_video_path, hog_detector, cnn_detector,
+                                     predictor, output_video_path, output_csv_path,
+                                     options)
+
+    if ret == False:
+        return ret
+
+    if options['output_video'] != False and options['compress_video'] != False:
+        ret = compress_one_video(output_video_path)
+
+    return ret
+
 def main():
     #input_video_path = '.'
     input_video_path = '20200528_1AB.mp4' # rotation test
@@ -592,24 +615,26 @@ def main():
     # translate to abs path
     input_video_path = os.path.abspath(input_video_path)
 
+    logger_print('')
+
     if os.path.isfile(input_video_path) != False:
-        output_csv_path, output_video_path = get_process_parameters(input_video_path)
 
-        logger_print('Check existing data:')
+        options = {
+            'output_video': True,
+            'output_csv': True,
+            'overwrite': True,
 
-        if os.path.isfile(output_video_path):
-            logger_print('  video data will be overwritten')
+            # debug options
+            'frame_index_max': -1,
+            'use_cnn_when_fail': False,
+            'compress_video': False,
+        }
 
-        if os.path.isfile(output_csv_path):
-            logger_print('  csv data will be overwritten')
-
-        times, ears = process_one_video(input_video_path, hog_detector, cnn_detector, predictor,
-                                        output_video_path, # None to disable output
-                                        output_csv_path,
-                                        -1)                # -1 to process all frames
-
-        # super slow...
-        #ret = compress_one_video(output_video_path)
+        ret = process_one_video(input_video_path, hog_detector, cnn_detector, predictor, options)
+        if ret == False:
+            logger_print('Failed to process video file %s\n' % (input_video_path))
+        else:
+            logger_print('Success to process video file %s\n' % (input_video_path))
 
     elif os.path.isdir(input_video_path):
 
@@ -618,41 +643,34 @@ def main():
             for file in files:
                 file_path = os.path.join(root, file)
 
-                file = mime.from_file(file_path)
-                if file.find('video') != -1:
-                    output_csv_path, output_video_path = get_process_parameters(file_path)
+                file_mine = mime.from_file(file_path)
+                if file_mine.find('video') == -1:
+                    continue
 
-                    logger_print('Check existing data:')
+                options = {
+                    'output_video': False,
+                    'output_csv': True,
+                    'overwrite': False,
 
-                    if os.path.isfile(output_video_path):
-                        logger_print('  video data exists, skip processing file')
-                        continue
+                    # debug options
+                    'frame_index_max': -1,
+                    'use_cnn_when_fail': False,
+                    'compress_video': False,
+                }
 
-                    if os.path.isfile(output_csv_path):
-                        logger_print('  csv data exists, skip processing file')
-                        continue
+                ret = process_one_video(file_path, hog_detector, cnn_detector, predictor, options)
+                if ret == False:
+                    logger_print('Failed to process video file %s\n' % (file_path))
+                else:
+                    logger_print('Success to process video file %s\n' % (file_path))
 
-                    times, ears = process_one_video(file_path, hog_detector, cnn_detector, predictor,
-                                                    output_video_path, # None to disable output
-                                                    output_csv_path,
-                                                    -1)                # -1 to process all frames
-
-                    # super slow...
-                    compress_one_video(output_video_path)
     else:
-        logger_print('Input path %s could not be handled' % (input_video_path))
+        logger_print('Fail to process input path %s' % (input_video_path))
 
     # stop the logger
     logger_stop()
 
     return
-    if len(times) != 0:
-        plt.plot(times, ears, 'r--')
-        plt.title('EAR-time', fontsize = 20)
-        plt.xlabel('time', fontsize = 12)
-        plt.ylabel('EAR', fontsize = 12)
-
-        plt.show()
 
 if __name__ == '__main__':
     main()
