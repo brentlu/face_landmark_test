@@ -589,26 +589,27 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
         logger_print('  output csv path   = %s' % (output_csv_path))
 
         if os.path.isfile(output_csv_path) != False:
-            if options['overwrite'] == False:
+            if options['update_csv'] != False:
+                # partial update csv file
+                logger_print('  csv data will be updated')
+
+                directory, _ = os.path.split(output_csv_path)
+                input_csv_path = os.path.join(directory, 'tmp.csv')
+
+                # delete the tmp csv if already exist
+                if os.path.exists(input_csv_path):
+                    os.remove(input_csv_path)
+
+                os.rename(r'%s' % output_csv_path, r'%s' % input_csv_path)
+                options['input_csv'] = True
+
+            elif options['overwrite_csv'] == False:
                 logger_print('  csv data exists, abort')
+
                 return False
 
-            # partial update csv file
-            logger_print('  csv data will be updated')
-
-            if options['output_video'] != False:
-                options['output_video'] = False
-                logger_print('  video data will not be generated')
-
-            directory, _ = os.path.split(output_csv_path)
-            input_csv_path = os.path.join(directory, 'tmp.csv')
-
-            # delete the tmp csv if already exist
-            if os.path.exists(input_csv_path):
-                os.remove(input_csv_path)
-
-            os.rename(r'%s' % output_csv_path, r'%s' % input_csv_path)
-            options['input_csv'] = True
+            else:
+                logger_print('  csv data will be overwritten')
     else:
         output_csv_path = None
 
@@ -620,7 +621,7 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
         logger_print('  output video path = %s' % (output_video_path))
 
         if os.path.isfile(output_video_path) != False:
-            if options['overwrite'] == False:
+            if options['overwrite_video'] == False:
                 logger_print('  video data exists, abort')
                 return False
             logger_print('  video data will be overwritten')
@@ -672,9 +673,14 @@ def main():
     if os.path.isfile(input_video_path) != False:
 
         options = {
-            'output_video': False,
+            # update the csv if found
             'output_csv': True,
-            'overwrite': True,
+            'update_csv': True,
+            'overwrite_csv': False,
+
+            # do not output video
+            'output_video': False,
+            'overwrite_video': False,
 
             # debug options
             'frame_index_max': -1,
@@ -699,9 +705,14 @@ def main():
                     continue
 
                 options = {
-                    'output_video': False,
+                    # only allows generate a new one if not available
                     'output_csv': True,
-                    'overwrite': False,
+                    'update_csv': False,
+                    'overwrite_csv': False,
+
+                    # do not output video
+                    'output_video': False,
+                    'overwrite_video': False,
 
                     # debug options
                     'frame_index_max': -1,
@@ -742,9 +753,14 @@ def get_csv_data_file(video_path):
         return csv_path
 
     options = {
-        'output_video': False,
+        # only allows generate a new one if not available
         'output_csv': True,
-        'overwrite': False,
+        'update_csv': False,
+        'overwrite_csv': False,
+
+        # do not output video
+        'output_video': False,
+        'overwrite_video': False,
 
         # debug options
         'frame_index_max': -1,
