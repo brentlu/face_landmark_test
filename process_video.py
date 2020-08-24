@@ -10,6 +10,7 @@ import magic
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import subprocess
 import time
 
 
@@ -172,6 +173,8 @@ def auto_detect_rotation(video_path, detector):
 
     cap = cv2.VideoCapture(video_path)
 
+    logger_print('  orientation detection:')
+
     while True:
         ret, frame = cap.read()
         if ret == False:
@@ -193,7 +196,6 @@ def auto_detect_rotation(video_path, detector):
                 #logger_print('auto_detect_rotation: %d faces found for %s' % (faces_num, text[i]))
 
             if counts[i] >= 5:
-                logger_print('  orientation detection:')
                 logger_print('    need to rotate %s' % (text[i]))
                 cap.release()
                 return degrees[i]
@@ -458,9 +460,8 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
 
     if output_video_path != None:
         # always use mp4
-        output_size = (int(width / 4), int(height / 4))
         video_writer = cv2.VideoWriter(output_video_path, cv2.VideoWriter_fourcc(*'mp4v'),
-                                       fps, output_size)
+                                       fps, (width, height))
 
     if output_csv_path != None:
         csvfile = open(output_csv_path, 'w', newline='')
@@ -513,7 +514,6 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
                 csv_writer.writerow(frame_result)
 
         if output_video_path != None:
-            frame = cv2.resize(frame, output_size)
             video_writer.write(frame)
 
         # don't want to process entire video
@@ -534,6 +534,43 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
     cap.release()
 
     return times, ears
+
+def compress_one_video(output_video_path):
+
+    directory, _ = os.path.split(output_video_path)
+    tmp_video_path = os.path.join(directory, 'tmp.mp4')
+
+    if os.path.exists(tmp_video_path):
+        os.remove(tmp_video_path)
+
+    os.rename(r'%s' % output_video_path, r'%s' % tmp_video_path)
+
+    # prepare ffmpeg command
+    cmd = ['ffmpeg', '-i', tmp_video_path, '-c:v', 'libx264', '-preset', 'veryslow', '-crf', '28', '-c:a', 'copy', output_video_path]
+
+    logger_print('Compress output video:')
+
+    p = subprocess.Popen(cmd, stdout = subprocess.PIPE, stderr = subprocess.PIPE, universal_newlines = True)
+    outs, errs = p.communicate()
+
+    if p.returncode != 0:
+        logger_print('  compression fail')
+        logger_print('  ffmpeg output:')
+        logger_print(errs)
+
+        if os.path.exists(output_video_path):
+            os.remove(output_video_path)
+
+        os.rename(r'%s' % tmp_video_path, r'%s' % output_video_path)
+        return False
+
+    logger_print('  compression success')
+    logger_print('  ffmpeg output:')
+    logger_print(outs)
+
+    os.remove(tmp_video_path)
+
+    return True
 
 def main():
     #input_video_path = '.'
@@ -570,6 +607,10 @@ def main():
                                         output_video_path, # None to disable output
                                         output_csv_path,
                                         -1)                # -1 to process all frames
+
+        # super slow...
+        #ret = compress_one_video(output_video_path)
+
     elif os.path.isdir(input_video_path):
 
         mime = magic.Magic(mime=True)
@@ -595,6 +636,9 @@ def main():
                                                     output_video_path, # None to disable output
                                                     output_csv_path,
                                                     -1)                # -1 to process all frames
+
+                    # super slow...
+                    compress_one_video(output_video_path)
     else:
         logger_print('Input path %s could not be handled' % (input_video_path))
 
