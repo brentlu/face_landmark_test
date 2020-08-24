@@ -7,7 +7,6 @@ import dlib
 import hashlib
 #import imutils
 import magic
-import matplotlib.pyplot as plt
 import numpy as np
 import os
 import subprocess
@@ -93,18 +92,18 @@ def check_data_directory():
     logger_print('Check data directory:')
 
     data_path = get_data_path('data')
+    data_path = os.path.abspath(data_path)
 
     csv_path = get_data_path('csv')
+    csv_path = os.path.abspath(csv_path)
+
     log_path = get_data_path('log')
+    log_path = os.path.abspath(log_path)
+
     video_path = get_data_path('video')
+    video_path = os.path.abspath(video_path)
 
-    abs_data_path = os.path.abspath(data_path)
-
-    abs_csv_path = os.path.abspath(csv_path)
-    abs_log_path = os.path.abspath(log_path)
-    abs_video_path = os.path.abspath(video_path)
-
-    pathes = (abs_data_path, abs_csv_path, abs_log_path, abs_video_path)
+    pathes = (data_path, csv_path, log_path, video_path)
 
     for path in pathes:
         if os.path.isdir(path) == False:
@@ -116,9 +115,10 @@ def check_data_directory():
                 return False
 
     logger_print('  all good')
+
     return True
 
-def get_md5_digest(path, size):
+def calculate_md5_digest(path, size):
     block_size = 4096
     remain_size = size
 
@@ -365,7 +365,7 @@ def process_one_frame(frame, hog_detector, cnn_detector, predictor, frame_result
                     continue
 
                 # draw red rectangles before leaving
-                if osd_enable != False:
+                if options['output_video'] != False:
                     draw_face_rectangles(frame, faces, target)
 
                 return False
@@ -503,17 +503,18 @@ def process_one_video_internal(input_video_path, hog_detector, cnn_detector, pre
 
     return True
 
-def compress_one_video(output_video_path):
-    directory, _ = os.path.split(output_video_path)
-    tmp_video_path = os.path.join(directory, 'tmp.mp4')
+def compress_one_video(video_path):
+    directory, _ = os.path.split(video_path)
+    tmp_path = os.path.join(directory, 'tmp.mp4')
 
-    if os.path.exists(tmp_video_path):
-        os.remove(tmp_video_path)
+    # delete the tmp video if already exist
+    if os.path.exists(tmp_path):
+        os.remove(tmp_path)
 
-    os.rename(r'%s' % output_video_path, r'%s' % tmp_video_path)
+    os.rename(r'%s' % video_path, r'%s' % tmp_path)
 
     # prepare ffmpeg command
-    cmd = ['ffmpeg', '-i', tmp_video_path, '-c:v', 'libx264', '-preset', 'veryslow', '-crf', '28', '-c:a', 'copy', output_video_path]
+    cmd = ['ffmpeg', '-i', tmp_path, '-c:v', 'libx264', '-preset', 'veryslow', '-crf', '28', '-c:a', 'copy', video_path]
 
     logger_print('Compress output video:')
 
@@ -525,23 +526,24 @@ def compress_one_video(output_video_path):
         logger_print('  ffmpeg output:')
         logger_print(errs)
 
-        if os.path.exists(output_video_path):
-            os.remove(output_video_path)
+        if os.path.exists(video_path):
+            os.remove(video_path)
 
-        os.rename(r'%s' % tmp_video_path, r'%s' % output_video_path)
+        os.rename(r'%s' % tmp_path, r'%s' % video_path)
         return False
 
     logger_print('  compression success')
     logger_print('  ffmpeg output:')
     logger_print(outs)
 
-    os.remove(tmp_video_path)
+    # delete tmp video before leaving
+    os.remove(tmp_path)
 
     return True
 
 def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, options):
     # first 64KB should be sufficient
-    file_hash = get_md5_digest(input_video_path, 64 * 1024)
+    file_hash = calculate_md5_digest(input_video_path, 64 * 1024)
 
     # remove directory part
     _, file_name = os.path.split(input_video_path)
@@ -586,18 +588,22 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
     ret = process_one_video_internal(input_video_path, hog_detector, cnn_detector,
                                      predictor, output_video_path, output_csv_path,
                                      options)
+    if ret != False and \
+       options['output_video'] != False and options['compress_video'] != False:
+        ret = compress_one_video(output_video_path)
 
     if ret == False:
-        return ret
-
-    if options['output_video'] != False and options['compress_video'] != False:
-        ret = compress_one_video(output_video_path)
+        logger_print('Failed to process video file %s\n' % (input_video_path))
+    else:
+        logger_print('Success to process video file %s\n' % (input_video_path))
 
     return ret
 
+
 def main():
     #input_video_path = '.'
-    input_video_path = '20200528_1AB.mp4' # rotation test
+    input_video_path = '/media/Temp_AIpose20200528/SJCAM/20200528_11AB.mp4'
+    #input_video_path = '20200528_1AB.mp4' # rotation test
 
     # init for all videos
     hog_detector = dlib.get_frontal_face_detector()
@@ -620,7 +626,7 @@ def main():
     if os.path.isfile(input_video_path) != False:
 
         options = {
-            'output_video': True,
+            'output_video': False,
             'output_csv': True,
             'overwrite': True,
 
@@ -631,10 +637,6 @@ def main():
         }
 
         ret = process_one_video(input_video_path, hog_detector, cnn_detector, predictor, options)
-        if ret == False:
-            logger_print('Failed to process video file %s\n' % (input_video_path))
-        else:
-            logger_print('Success to process video file %s\n' % (input_video_path))
 
     elif os.path.isdir(input_video_path):
 
@@ -659,10 +661,6 @@ def main():
                 }
 
                 ret = process_one_video(file_path, hog_detector, cnn_detector, predictor, options)
-                if ret == False:
-                    logger_print('Failed to process video file %s\n' % (file_path))
-                else:
-                    logger_print('Success to process video file %s\n' % (file_path))
 
     else:
         logger_print('Fail to process input path %s' % (input_video_path))
@@ -671,6 +669,47 @@ def main():
     logger_stop()
 
     return
+
+def get_csv_data_file(video_path):
+    # abs path
+    video_path = os.path.abspath(video_path)
+
+    file_hash = calculate_md5_digest(video_path, 64 * 1024)
+
+    # remove directory part
+    _, file_name = os.path.split(video_path)
+    # remove ext part
+    file_name, _ = os.path.splitext(file_name)
+
+    csv_name = '%s-%s.csv' % (file_name, str(file_hash))
+    csv_path = os.path.join(get_data_path('csv'), csv_name)
+    csv_path = os.path.abspath(csv_path)
+
+    if os.path.isfile(csv_path) != False:
+        # already in data folder
+        return csv_path
+
+    options = {
+        'output_video': False,
+        'output_csv': True,
+        'overwrite': False,
+
+        # debug options
+        'frame_index_max': -1,
+        'use_cnn_when_fail': False,
+        'compress_video': False,
+    }
+
+    # init for video
+    hog_detector = dlib.get_frontal_face_detector()
+    cnn_detector = dlib.cnn_face_detection_model_v1('./mmod_human_face_detector.dat')
+    predictor = dlib.shape_predictor('shape_predictor_68_face_landmarks.dat')
+
+    ret = process_one_video(video_path, hog_detector, cnn_detector, predictor, options)
+    if ret == False:
+        return None
+
+    return csv_path
 
 if __name__ == '__main__':
     main()
