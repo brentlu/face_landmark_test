@@ -584,10 +584,12 @@ def main():
                     logger_print('Check existing data:')
 
                     if os.path.isfile(output_video_path):
-                        logger_print('  video data will be overwritten')
+                        logger_print('  video data exists, skip processing file')
+                        continue
 
                     if os.path.isfile(output_csv_path):
-                        logger_print('  csv data will be overwritten')
+                        logger_print('  csv data exists, skip processing file')
+                        continue
 
                     times, ears = process_one_video(file_path, hog_detector, cnn_detector, predictor,
                                                     output_video_path, # None to disable output
