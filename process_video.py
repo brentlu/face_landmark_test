@@ -9,6 +9,7 @@ import hashlib
 import magic
 import numpy as np
 import os
+import re
 import subprocess
 import time
 
@@ -651,9 +652,8 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
 
 
 def main():
-    input_video_path = '/media/Temp_AIpose20200528'
-    #input_video_path = '/media/Temp_AIpose20200528/SJCAM/20200528_11AB.mp4'
-    #input_video_path = '20200528_1AB.mp4' # rotation test
+    #input_video_path = '/media'
+    input_video_path = '/media/Temp_AIpose20200521/SJCAM/20200521_5AB.mp4'
 
     # translate to abs path
     input_video_path = os.path.abspath(input_video_path)
@@ -698,6 +698,9 @@ def main():
 
     elif os.path.isdir(input_video_path):
 
+        # looking for any video file ends with 'B'
+        prog = re.compile('.*B\..*')
+
         mime = magic.Magic(mime=True)
         for root, dirs, files in os.walk(input_video_path):
             for file in files:
@@ -705,6 +708,9 @@ def main():
 
                 file_mine = mime.from_file(file_path)
                 if file_mine.find('video') == -1:
+                    continue
+
+                if prog.match(file) == False:
                     continue
 
                 options = {
