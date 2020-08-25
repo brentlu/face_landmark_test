@@ -396,7 +396,7 @@ def process_one_frame(frame, hog_detector, cnn_detector, predictor, frame_result
     # should not get here
     return False
 
-def process_one_video_internal(input_video_path, input_csv_path, hog_detector, cnn_detector, predictor, output_video_path, output_csv_path, options):
+def process_one_video_internal(input_video_path, input_csv_path, hog_detector, cnn_detector, predictor, options):
     # init for video
     csv_index = 0
     frame_index = 0
@@ -433,7 +433,7 @@ def process_one_video_internal(input_video_path, input_csv_path, hog_detector, c
 
     if options['output_video'] != False:
         # always use mp4
-        video_writer = cv2.VideoWriter(output_video_path, cv2.VideoWriter_fourcc(*'mp4v'),
+        video_writer = cv2.VideoWriter(options['output_video_path'], cv2.VideoWriter_fourcc(*'mp4v'),
                                        fps, (width, height))
 
     if options['input_csv'] != False:
@@ -447,7 +447,7 @@ def process_one_video_internal(input_video_path, input_csv_path, hog_detector, c
             csv_index = frame_count + 1
 
     if options['output_csv'] != False:
-        csv_file_write = open(output_csv_path, 'w', newline='')
+        csv_file_write = open(options['output_csv_path'], 'w', newline='')
         csv_writer = csv.DictWriter(csv_file_write, fieldnames = csv_fields)
         csv_writer.writeheader()
 
@@ -568,6 +568,8 @@ def compress_one_video(video_path):
     return True
 
 def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, options):
+    input_csv_path = ''
+
     # first 64KB should be sufficient
     file_hash = calculate_md5_digest(input_video_path, 64 * 1024)
 
@@ -585,6 +587,7 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
         output_csv_name = '%s-%s.csv' % (file_name, str(file_hash))
         output_csv_path = os.path.join(get_data_path('csv'), output_csv_name)
         output_csv_path = os.path.abspath(output_csv_path)
+        options['output_csv_path'] = output_csv_path
 
         logger_print('  output csv path   = %s' % (output_csv_path))
 
@@ -617,6 +620,7 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
         output_video_name = '%s-%s.mp4' % (file_name, str(file_hash))
         output_video_path = os.path.join(get_data_path('video'), output_video_name)
         output_video_path = os.path.abspath(output_video_path)
+        options['output_video_path'] = output_video_path
 
         logger_print('  output video path = %s' % (output_video_path))
 
@@ -630,7 +634,6 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
 
     ret = process_one_video_internal(input_video_path, input_csv_path,
                                      hog_detector, cnn_detector, predictor,
-                                     output_video_path, output_csv_path,
                                      options)
     if ret != False and \
        options['output_video'] != False and options['compress_video'] != False:
@@ -648,8 +651,8 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
 
 
 def main():
-    #input_video_path = '.'
-    input_video_path = '/media/Temp_AIpose20200528/SJCAM/20200528_11AB.mp4'
+    input_video_path = '/media/Temp_AIpose20200528'
+    #input_video_path = '/media/Temp_AIpose20200528/SJCAM/20200528_11AB.mp4'
     #input_video_path = '20200528_1AB.mp4' # rotation test
 
     # translate to abs path
