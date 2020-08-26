@@ -1,11 +1,9 @@
+#!/usr/bin/python3
 
-from scipy.spatial import distance as dist
-#from imutils import face_utils
 import csv
 import cv2
 import dlib
 import hashlib
-#import imutils
 import magic
 import numpy as np
 import os
@@ -58,6 +56,9 @@ def logger_print(string, end = '\n'):
 
     print(string, end = end)
 
+    if end == '\r':
+        end = '\n'
+
     if logger_started != 0:
         logger_file.write('%s%s' % (string, end))
 
@@ -71,7 +72,6 @@ def logger_stop():
         logger_file.close()
 
     return
-
 
 def get_data_path(directory):
     if directory == 'data':
@@ -276,32 +276,6 @@ def draw_landmarks(img, landmarks, part, marker):
 
     return
 
-def calculate_ear_value(landmarks, eye):
-    if eye == 'left':
-        # euclidean distances between the two sets of vertical eye landmarks
-        A = dist.euclidean((landmarks.part(43).x, landmarks.part(43).y),
-                           (landmarks.part(47).x, landmarks.part(47).y))
-        B = dist.euclidean((landmarks.part(44).x, landmarks.part(44).y),
-                           (landmarks.part(46).x, landmarks.part(46).y))
-        # euclidean distance between the horizontal eye landmark
-        C = dist.euclidean((landmarks.part(42).x, landmarks.part(42).y),
-                           (landmarks.part(45).x, landmarks.part(45).y))
-    elif eye == 'right':
-        # euclidean distances between the two sets of vertical eye landmarks
-        A = dist.euclidean((landmarks.part(38).x, landmarks.part(38).y),
-                           (landmarks.part(40).x, landmarks.part(40).y))
-        B = dist.euclidean((landmarks.part(37).x, landmarks.part(37).y),
-                           (landmarks.part(41).x, landmarks.part(41).y))
-        # euclidean distance between the horizontal eye landmark
-        C = dist.euclidean((landmarks.part(39).x, landmarks.part(39).y),
-                           (landmarks.part(36).x, landmarks.part(36).y))
-    else:
-        logger_print('calculate_ear_value: unknown eye %s' % (eye))
-
-    ear = (A + B) / (2.0 * C)
-
-    return ear
-
 def process_one_frame(frame, hog_detector, cnn_detector, predictor, frame_result, options):
     # init for frame
     state = 'init'
@@ -385,10 +359,14 @@ def process_one_frame(frame, hog_detector, cnn_detector, predictor, frame_result
             if options['output_video'] != False:
                 draw_landmarks(frame, landmarks, 'left-eye', 'circle')
 
-            # calculate ear values for both eyes
-            frame_result['ear_left'] = calculate_ear_value(landmarks, 'left')
-            frame_result['ear_right'] = calculate_ear_value(landmarks, 'right')
+            for n in range(0, 68):
+                x = landmarks.part(n).x
+                y = landmarks.part(n).y
 
+                frame_result['mark_%d_x' % (n)] = x
+                frame_result['mark_%d_y' % (n)] = y
+
+            logger_print('process_one_frame: success', end = '\r')
             return True
         else:
             logger_print('process_one_frame: unknown state %s' % (state))
@@ -402,7 +380,14 @@ def process_one_video_internal(input_video_path, input_csv_path, hog_detector, c
     csv_index = 0
     frame_index = 0
     frame_fail_count = 0
-    csv_fields = ['index', 'detector', 'total_face_num', 'center_face_num', 'target_left', 'target_top', 'target_right', 'target_bottom', 'time_stamp', 'ear_left', 'ear_right']
+    csv_fields = ['index', 'detector', 'total_face_num', 'center_face_num', 'target_left', 'target_top', 'target_right', 'target_bottom', 'time_stamp', \
+                  'mark_0_x', 'mark_0_y', 'mark_1_x', 'mark_1_y', 'mark_2_x', 'mark_2_y', 'mark_3_x', 'mark_3_y', 'mark_4_x', 'mark_4_y', 'mark_5_x', 'mark_5_y', 'mark_6_x', 'mark_6_y', 'mark_7_x', 'mark_7_y', 'mark_8_x', 'mark_8_y', 'mark_9_x', 'mark_9_y', \
+                  'mark_10_x', 'mark_10_y', 'mark_11_x', 'mark_11_y', 'mark_12_x', 'mark_12_y', 'mark_13_x', 'mark_13_y', 'mark_14_x', 'mark_14_y', 'mark_15_x', 'mark_15_y', 'mark_16_x', 'mark_16_y', 'mark_17_x', 'mark_17_y', 'mark_18_x', 'mark_18_y', 'mark_19_x', 'mark_19_y', \
+                  'mark_20_x', 'mark_20_y', 'mark_21_x', 'mark_21_y', 'mark_22_x', 'mark_22_y', 'mark_23_x', 'mark_23_y', 'mark_24_x', 'mark_24_y', 'mark_25_x', 'mark_25_y', 'mark_26_x', 'mark_26_y', 'mark_27_x', 'mark_27_y', 'mark_28_x', 'mark_28_y', 'mark_29_x', 'mark_29_y', \
+                  'mark_30_x', 'mark_30_y', 'mark_31_x', 'mark_31_y', 'mark_32_x', 'mark_32_y', 'mark_33_x', 'mark_33_y', 'mark_34_x', 'mark_34_y', 'mark_35_x', 'mark_35_y', 'mark_36_x', 'mark_36_y', 'mark_37_x', 'mark_37_y', 'mark_38_x', 'mark_38_y', 'mark_39_x', 'mark_39_y', \
+                  'mark_40_x', 'mark_40_y', 'mark_41_x', 'mark_41_y', 'mark_42_x', 'mark_42_y', 'mark_43_x', 'mark_43_y', 'mark_44_x', 'mark_44_y', 'mark_45_x', 'mark_45_y', 'mark_46_x', 'mark_46_y', 'mark_47_x', 'mark_47_y', 'mark_48_x', 'mark_48_y', 'mark_49_x', 'mark_49_y', \
+                  'mark_50_x', 'mark_50_y', 'mark_51_x', 'mark_51_y', 'mark_52_x', 'mark_52_y', 'mark_53_x', 'mark_53_y', 'mark_54_x', 'mark_54_y', 'mark_55_x', 'mark_55_y', 'mark_56_x', 'mark_56_y', 'mark_57_x', 'mark_57_y', 'mark_58_x', 'mark_58_y', 'mark_59_x', 'mark_59_y', \
+                  'mark_60_x', 'mark_60_y', 'mark_61_x', 'mark_61_y', 'mark_62_x', 'mark_62_y', 'mark_63_x', 'mark_63_y', 'mark_64_x', 'mark_64_y', 'mark_65_x', 'mark_65_y', 'mark_66_x', 'mark_66_y', 'mark_67_x', 'mark_67_y']
 
     logger_print('Process video:')
 
@@ -459,29 +444,16 @@ def process_one_video_internal(input_video_path, input_csv_path, hog_detector, c
             break;
 
         # prepare an empty dict
-        frame_result = {
-            'index': 0,
-            'detector': 'h', # 'h' for hog and 'c' for cnn
-            'total_face_num': 0,
-            'center_face_num': 0,
-            'target_left': 0,
-            'target_top': 0,
-            'target_right': 0,
-            'target_bottom': 0,
-            'time_stamp': 0.0,
-            'ear_left': 0.0,
-            'ear_right': 0.0,
-        }
+        frame_result = {}
 
         frame_index += 1
-        frame_result['index'] = frame_index
 
         logger_print('  frame: (%3d/%d), ' % (frame_index, frame_count), end = '')
 
         if options['input_csv'] != False:
             if frame_index == csv_index:
                 # copy dict entry
-                logger_print('ts: %4.3f, ear: (%4.3f,%4.3f), copy' % (float(row['time_stamp']), float(row['ear_left']), float(row['ear_right'])))
+                logger_print('copy from csv file', end = '\r')
                 if options['output_csv'] != False:
                     csv_writer.writerow(row)
                 try:
@@ -498,12 +470,11 @@ def process_one_video_internal(input_video_path, input_csv_path, hog_detector, c
         if ret == False:
             frame_fail_count += 1
         else:
-            time_stamp = frame_index / fps
-            frame_result['time_stamp'] = time_stamp
-
-            logger_print('ts: %4.3f, ear: (%4.3f,%4.3f)' % (time_stamp, frame_result['ear_left'], frame_result['ear_right']))
-
             if options['output_csv'] != False:
+                time_stamp = frame_index / fps
+                frame_result['time_stamp'] = time_stamp
+                frame_result['index'] = frame_index
+
                 csv_writer.writerow(frame_result)
 
         if options['output_video'] != False:
