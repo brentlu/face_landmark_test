@@ -538,7 +538,7 @@ def compress_one_video(video_path):
     if os.path.exists(tmp_path):
         os.remove(tmp_path)
 
-    os.rename(r'%s' % video_path, r'%s' % tmp_path)
+    os.rename('%s' % video_path, '%s' % tmp_path)
 
     # prepare ffmpeg command
     cmd = ['ffmpeg', '-i', tmp_path, '-c:v', 'libx264', '-preset', 'veryslow', '-crf', '28', '-c:a', 'copy', video_path]
@@ -556,7 +556,7 @@ def compress_one_video(video_path):
         if os.path.exists(video_path):
             os.remove(video_path)
 
-        os.rename(r'%s' % tmp_path, r'%s' % video_path)
+        os.rename('%s' % tmp_path, '%s' % video_path)
         return False
 
     logger_print('  compression success')
@@ -604,7 +604,7 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
                 if os.path.exists(input_csv_path):
                     os.remove(input_csv_path)
 
-                os.rename(r'%s' % output_csv_path, r'%s' % input_csv_path)
+                os.rename('%s' % output_csv_path, '%s' % input_csv_path)
                 options['input_csv'] = True
 
             elif options['overwrite_csv'] == False:
@@ -653,7 +653,7 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
 
 def main():
     #input_video_path = '/media'
-    input_video_path = '/media/Temp_AIpose20200521/SJCAM/20200521_5AB.mp4'
+    input_video_path = '/media/Temp_AIpose20200811'
 
     # translate to abs path
     input_video_path = os.path.abspath(input_video_path)
@@ -698,8 +698,8 @@ def main():
 
     elif os.path.isdir(input_video_path):
 
-        # looking for any video file ends with 'B'
-        prog = re.compile('.*B\..*')
+        # looking for any video file which name ends with a 'B' character
+        prog = re.compile(r'.*B\..+')
 
         mime = magic.Magic(mime=True)
         for root, dirs, files in os.walk(input_video_path):
@@ -710,7 +710,7 @@ def main():
                 if file_mine.find('video') == -1:
                     continue
 
-                if prog.match(file) == False:
+                if prog.match(file) == None:
                     continue
 
                 options = {
