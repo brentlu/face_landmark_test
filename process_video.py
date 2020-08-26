@@ -30,7 +30,7 @@ def logger_start():
 
     logger_print('Start logger:')
 
-    # get current time
+    # get current time (UTC time)
     now = time.gmtime()
 
     timestamp = time.strftime('%Y-%m%d-%H%M', now)
@@ -59,8 +59,12 @@ def logger_print(string, end = '\n'):
     if end == '\r':
         end = '\n'
 
+    # get current time (local time)
+    now = time.localtime()
+    timestamp = time.strftime('%Y-%m-%dT%H:%M:%S%z', now)
+
     if logger_started != 0:
-        logger_file.write('%s%s' % (string, end))
+        logger_file.write('%s %s%s' % (timestamp, string, end))
 
     return
 
