@@ -3,11 +3,11 @@
 from scipy.spatial import distance as dist
 import csv
 import cv2
-#import dlib
 import matplotlib.pyplot as plt
 #import os
-from facial_video import FacialVideo
 import process_video as pv
+
+from facial_video import FacialVideo
 
 # a test program to
 #   1. draw face landmarks
@@ -69,44 +69,6 @@ def calculate_ear_value(landmarks, eye):
 
     return ear
 
-def calculate_min_avg_ear(video_path, eye):
-    total_ear = 0.0
-    total_frame = 0
-
-    ear = 0.0
-    min_ear = 1
-
-    csv_path = pv.get_csv_data_file(video_path)
-
-    if csv_path == None:
-        print('csv data not available')
-        return 0.0
-
-    # open the csv file
-    csvfile = open(csv_path, 'r', newline = '')
-    csv_reader = csv.DictReader(csvfile)
-
-    for csv_row in csv_reader:
-        landmarks = []
-
-        for n in range(0, 68):
-            x = int(csv_row['mark_%d_x' % (n)])
-            y = int(csv_row['mark_%d_y' % (n)])
-
-            landmarks.append((x, y))
-
-        ear = calculate_ear_value(landmarks, eye)
-        if ear < min_ear:
-            min_ear = ear
-
-        total_ear += ear
-        total_frame += 1
-
-    csvfile.close()
-
-    return min_ear, total_ear / total_frame
-
-
 def main():
     input_video_path = './20200429_2B.mp4'
     output_video_path = './test2.mp4'
@@ -114,10 +76,10 @@ def main():
     times = []
     ears = []
 
-    min_ear, avg_ear = calculate_min_avg_ear(input_video_path, 'left')
-    print('min ear %f, avg ear %f' % (min_ear, avg_ear))
-
     fv = FacialVideo(input_video_path)
+
+    min_ear, avg_ear = fv.calculate_min_avg_ear('left')
+    print('min ear %f, avg ear %f' % (min_ear, avg_ear))
 
     # always use mp4
     video_writer = cv2.VideoWriter(output_video_path, cv2.VideoWriter_fourcc(*'mp4v'),
