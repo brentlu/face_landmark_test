@@ -250,7 +250,7 @@ def draw_landmarks(img, logger, landmarks, part, marker):
         x = landmarks.part(n).x
         y = landmarks.part(n).y
         if marker == 'circle':
-            cv2.circle(img, (x, y), 6, (255, 0, 0), -1)
+            cv2.circle(img, (x, y), 2, (255, 0, 0), -1)
         elif marker == 'text':
             cv2.circle(img, (x, y), 2, (255, 0, 0), -1)
             cv2.putText(img, str(n), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
@@ -341,7 +341,7 @@ def process_one_frame(frame, hog_detector, cnn_detector, predictor, logger, fram
             landmarks = predictor(gray, target)
 
             if options['output_video'] != False:
-                draw_landmarks(frame, logger, landmarks, 'left-eye', 'circle')
+                draw_landmarks(frame, logger, landmarks, 'all', 'circle')
 
             for n in range(0, 68):
                 x = landmarks.part(n).x
@@ -410,16 +410,16 @@ def process_one_video_internal(input_video_path, input_csv_path, hog_detector, c
         csv_file_read = open(input_csv_path, 'r', newline = '')
         csv_reader = csv.DictReader(csv_file_read)
 
+        # read the first row
         try:
             row = next(csv_reader)
             csv_index = int(row['index'])
         except StopIteration:
             csv_index = frame_count + 1
 
-    if options['output_csv'] != False:
-        csv_file_write = open(options['output_csv_path'], 'w', newline='')
-        csv_writer = csv.DictWriter(csv_file_write, fieldnames = csv_fields)
-        csv_writer.writeheader()
+    csv_file_write = open(options['output_csv_path'], 'w', newline='')
+    csv_writer = csv.DictWriter(csv_file_write, fieldnames = csv_fields)
+    csv_writer.writeheader()
 
     while True:
         ret, frame = cap.read()
@@ -438,13 +438,15 @@ def process_one_video_internal(input_video_path, input_csv_path, hog_detector, c
             if frame_index == csv_index:
                 # copy dict entry
                 logger.print('copy from csv file', end = '\r')
-                if options['output_csv'] != False:
-                    csv_writer.writerow(row)
+                csv_writer.writerow(row)
+
+                # read the next row
                 try:
                     row = next(csv_reader)
                     csv_index = int(row['index'])
                 except StopIteration:
                     csv_index = frame_count + 1
+
                 continue
 
         if rotation != -1:
@@ -454,12 +456,11 @@ def process_one_video_internal(input_video_path, input_csv_path, hog_detector, c
         if ret == False:
             frame_fail_count += 1
         else:
-            if options['output_csv'] != False:
-                time_stamp = frame_index / fps
-                frame_result['time_stamp'] = time_stamp
-                frame_result['index'] = frame_index
+            time_stamp = frame_index / fps
+            frame_result['time_stamp'] = time_stamp
+            frame_result['index'] = frame_index
 
-                csv_writer.writerow(frame_result)
+            csv_writer.writerow(frame_result)
 
         if options['output_video'] != False:
             video_writer.write(frame)
@@ -479,8 +480,7 @@ def process_one_video_internal(input_video_path, input_csv_path, hog_detector, c
         video_writer.release()
     if options['input_csv'] != False:
         csv_file_read.close()
-    if options['output_csv'] != False:
-        csv_file_write.close()
+    csv_file_write.close()
     cap.release()
 
     return True
@@ -539,38 +539,35 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, l
     logger.print('  input video path  = %s' % (input_video_path))
 
     # generate file name of output video and csv file
-    if options['output_csv'] != False:
-        output_csv_name = '%s-%s.csv' % (file_name, str(file_hash))
-        output_csv_path = os.path.join(get_data_path('csv'), output_csv_name)
-        output_csv_path = os.path.abspath(output_csv_path)
-        options['output_csv_path'] = output_csv_path
+    output_csv_name = '%s-%s.csv' % (file_name, str(file_hash))
+    output_csv_path = os.path.join(get_data_path('csv'), output_csv_name)
+    output_csv_path = os.path.abspath(output_csv_path)
+    options['output_csv_path'] = output_csv_path
 
-        logger.print('  output csv path   = %s' % (output_csv_path))
+    logger.print('  output csv path   = %s' % (output_csv_path))
 
-        if os.path.isfile(output_csv_path) != False:
-            if options['update_csv'] != False:
-                # partial update csv file
-                logger.print('  csv data will be updated')
+    if os.path.isfile(output_csv_path) != False:
+        if options['update_csv'] != False:
+            # partial update csv file
+            logger.print('  csv data will be updated')
 
-                directory, _ = os.path.split(output_csv_path)
-                input_csv_path = os.path.join(directory, 'tmp.csv')
+            directory, _ = os.path.split(output_csv_path)
+            input_csv_path = os.path.join(directory, 'tmp.csv')
 
-                # delete the tmp csv if already exist
-                if os.path.exists(input_csv_path):
-                    os.remove(input_csv_path)
+            # delete the tmp csv if already exist
+            if os.path.exists(input_csv_path):
+                os.remove(input_csv_path)
 
-                os.rename('%s' % output_csv_path, '%s' % input_csv_path)
-                options['input_csv'] = True
+            os.rename('%s' % output_csv_path, '%s' % input_csv_path)
+            options['input_csv'] = True
 
-            elif options['overwrite_csv'] == False:
-                logger.print('  csv data exists, abort')
+        elif options['overwrite_csv'] == False:
+            logger.print('  csv data exists, abort')
 
-                return False
+            return False
 
-            else:
-                logger.print('  csv data will be overwritten')
-    else:
-        output_csv_path = None
+        else:
+            logger.print('  csv data will be overwritten')
 
     if options['output_video'] != False:
         output_video_name = '%s-%s.mp4' % (file_name, str(file_hash))
@@ -613,7 +610,7 @@ def main():
 
     # check data directory
     if check_data_directory() == False:
-        logger.print('  fail to check data directory')
+        print('  fail to check data directory')
         return
 
     # start the logger
@@ -630,12 +627,11 @@ def main():
 
         options = {
             # update the csv if found
-            'output_csv': True,
             'update_csv': True,
             'overwrite_csv': False,
 
             # do not output video
-            'output_video': False,
+            'output_video': True,
 
             # debug options
             'frame_index_max': -1,
@@ -667,7 +663,6 @@ def main():
 
                 options = {
                     # only allows generate a new one if not available
-                    'output_csv': True,
                     'update_csv': False,
                     'overwrite_csv': False,
 
@@ -711,7 +706,6 @@ def get_csv_data_file(video_path):
 
     options = {
         # only allows generate a new one if not available
-        'output_csv': True,
         'update_csv': False,
         'overwrite_csv': False,
 
@@ -726,6 +720,7 @@ def get_csv_data_file(video_path):
 
     # check data directory
     if check_data_directory() == False:
+        print('  fail to check data directory')
         return None
 
     # start the logger
