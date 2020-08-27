@@ -12,70 +12,49 @@ import subprocess
 import time
 
 
-logger_started = 0
+class Logger:
+    def __init__(self):
+        print('Start logger:')
 
-def show_the_img(img, caption):
-    height, width, layers = img.shape
-    size = (int(width / 4), int(height / 4))
+        # get current time (UTC time)
+        now = time.gmtime()
 
-    img_resize = cv2.resize(img, size)
-    cv2.imshow(caption, img_resize)
-    cv2.waitKey(1)
+        timestamp = time.strftime('%Y-%m%d-%H%M', now)
 
-    return
+        log_path_base = os.path.join(get_data_path('log'), timestamp)
+        log_path_base = os.path.abspath(log_path_base)
 
-def logger_start():
-    global logger_started
-    global logger_file
+        # find a free slot
+        for n in range(1, 100):
+            log_path = '%s-%s.log' % (log_path_base, str(n))
+            if os.path.exists(log_path) == False:
+                break
 
-    logger_print('Start logger:')
+        self.__file = open(log_path, 'w')
 
-    # get current time (UTC time)
-    now = time.gmtime()
+        print('  log path = %s' % (log_path))
 
-    timestamp = time.strftime('%Y-%m%d-%H%M', now)
+        return
 
-    log_path_base = os.path.join(get_data_path('log'), timestamp)
-    log_path_base = os.path.abspath(log_path_base)
+    def __del__(self):
+        self.__file.close()
 
-    for n in range(1, 100):
-        log_path = '%s-%s.log' % (log_path_base, str(n))
-        if os.path.exists(log_path) == False:
-            break
+    def print(self, string, end = '\n'):
+        # print to screen directly
+        print(string, end = end)
 
-    logger_file = open(log_path, 'w')
-    logger_started = 1
+        if end == '\r':
+            end = '\n'
 
-    logger_print('  log path = %s' % (log_path))
+        # get current time (local time)
+        now = time.localtime()
+        timestamp = time.strftime('%Y-%m-%dT%H:%M:%S%z', now)
 
-    return
+        self.__file.write('%s %s%s' % (timestamp, string, end))
 
-def logger_print(string, end = '\n'):
-    global logger_started
-    global logger
+        return
 
-    print(string, end = end)
 
-    if end == '\r':
-        end = '\n'
-
-    # get current time (local time)
-    now = time.localtime()
-    timestamp = time.strftime('%Y-%m-%dT%H:%M:%S%z', now)
-
-    if logger_started != 0:
-        logger_file.write('%s %s%s' % (timestamp, string, end))
-
-    return
-
-def logger_stop():
-    global logger_started
-    global logger
-
-    if logger_started != 0:
-        logger_file.close()
-
-    return
 
 def get_data_path(directory):
     if directory == 'data':
@@ -87,14 +66,15 @@ def get_data_path(directory):
     elif directory == 'video':
         return './data/video'
     else:
-        logger_print('get_data_path: unknown directory %s' % (directory))
+        print('get_data_path: unknown directory %s' % (directory))
 
     # should not get here
     return ''
 
 def check_data_directory():
     # create basic layout of data directory
-    logger_print('Check data directory:')
+    # run before logger starts
+    print('Check data directory:')
 
     data_path = get_data_path('data')
     data_path = os.path.abspath(data_path)
@@ -113,13 +93,13 @@ def check_data_directory():
     for path in pathes:
         if os.path.isdir(path) == False:
             try:
-                logger_print('  create %s directory' % (path))
+                print('  create %s directory' % (path))
                 os.mkdir(path)
             except OSError:
-                logger_print('  fail to create %s directory' % (path))
+                print('  fail to create %s directory' % (path))
                 return False
 
-    logger_print('  all good')
+    print('  all good')
 
     return True
 
@@ -144,14 +124,14 @@ def decode_fourcc(v):
     v = int(v)
     return "".join([chr((v >> 8 * i) & 0xFF) for i in range(4)])
 
-def auto_detect_rotation(video_path, detector):
+def auto_detect_rotation(video_path, detector, logger):
     degrees = [-1, cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_180, cv2.ROTATE_90_COUNTERCLOCKWISE]
     text = ['none', '90 degree clockwise', '180 degree', '90 degree counter clockwise']
     counts = [0, 0, 0, 0]
 
     cap = cv2.VideoCapture(video_path)
 
-    logger_print('  orientation detection:')
+    logger.print('  orientation detection:')
 
     while True:
         ret, frame = cap.read()
@@ -171,10 +151,10 @@ def auto_detect_rotation(video_path, detector):
             faces_num = len(faces)
             if faces_num != 0:
                 counts[i] += faces_num
-                #logger_print('auto_detect_rotation: %d faces found for %s' % (faces_num, text[i]))
+                #logger.print('auto_detect_rotation: %d faces found for %s' % (faces_num, text[i]))
 
             if counts[i] >= 5:
-                logger_print('    need to rotate %s' % (text[i]))
+                logger.print('    need to rotate %s' % (text[i]))
                 cap.release()
                 return degrees[i]
 
@@ -205,7 +185,7 @@ def find_biggest_face(faces):
 
     return None
 
-def find_target_face(img, faces):
+def find_target_face(img, logger, faces):
     height, width, layers = img.shape
     threshold_left = width * 0.4
     threshold_right = width * 0.6
@@ -225,7 +205,7 @@ def find_target_face(img, faces):
         biggest = find_biggest_face(faces_center)
         if biggest == None:
             # should never happen
-            logger_print('find_target_face: fail to find biggest face')
+            logger.print('find_target_face: fail to find biggest face')
 
         return biggest, faces_center_num
     elif faces_center_num == 1:
@@ -235,7 +215,7 @@ def find_target_face(img, faces):
     # all faces are not in the center
     return None, 0
 
-def draw_rect(img, rect, color):
+def draw_rect(img, logger, rect, color):
     # draw rectangle
     x1 = rect.left()
     y1 = rect.top()
@@ -246,26 +226,26 @@ def draw_rect(img, rect, color):
     elif color == 'red':
         cv2.rectangle(img, (x1, y1), (x2, y2), (0, 0, 255), 3)
     else:
-        logger_print('draw_rect: unknown color %s' % (color))
+        logger.print('draw_rect: unknown color %s' % (color))
 
     return
 
-def draw_face_rectangles(img, faces, target):
+def draw_face_rectangles(img, logger, faces, target):
     for face in faces:
-        draw_rect(img, face, 'red')
+        draw_rect(img, logger, face, 'red')
 
     if target != None:
-        draw_rect(img, target, 'green')
+        draw_rect(img, logger, target, 'green')
 
     return
 
-def draw_landmarks(img, landmarks, part, marker):
+def draw_landmarks(img, logger, landmarks, part, marker):
     for n in range(0, 68):
         if part == 'left-eye':
             if n < 42 or n >= 48:
                 continue
         elif part != 'all':
-            logger_print('draw_landmarks: unknown part %s' % (part))
+            logger.print('draw_landmarks: unknown part %s' % (part))
 
         x = landmarks.part(n).x
         y = landmarks.part(n).y
@@ -276,11 +256,11 @@ def draw_landmarks(img, landmarks, part, marker):
             cv2.putText(img, str(n), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                         (255, 0, 0), 1, 8, False);
         else:
-            logger_print('draw_landmarks: unknown marker %s' % (marker))
+            logger.print('draw_landmarks: unknown marker %s' % (marker))
 
     return
 
-def process_one_frame(frame, hog_detector, cnn_detector, predictor, frame_result, options):
+def process_one_frame(frame, hog_detector, cnn_detector, predictor, logger, frame_result, options):
     # init for frame
     state = 'init'
     use_cnn = options['use_cnn_when_fail']
@@ -297,7 +277,7 @@ def process_one_frame(frame, hog_detector, cnn_detector, predictor, frame_result
             faces_num = len(faces)
 
             if faces_num == 0:
-                logger_print('process_one_frame: no face found by hog detector')
+                logger.print('process_one_frame: no face found by hog detector')
 
                 # try very slow cnn detector to find more faces
                 if use_cnn != False:
@@ -317,7 +297,7 @@ def process_one_frame(frame, hog_detector, cnn_detector, predictor, frame_result
             faces_num = len(faces)
 
             if faces_num == 0:
-                logger_print('process_one_frame: no face found by cnn detector')
+                logger.print('process_one_frame: no face found by cnn detector')
                 return False
 
             # we've got some faces
@@ -328,13 +308,13 @@ def process_one_frame(frame, hog_detector, cnn_detector, predictor, frame_result
             state = 'process_faces'
         elif state == 'process_faces':
             # find the target face
-            target, center_num = find_target_face(frame, faces)
+            target, center_num = find_target_face(frame, logger, faces)
 
             frame_result['center_face_num'] = center_num
 
             if target == None:
                 # all faces found are not in the center position
-                logger_print('process_one_frame: fail to find target face')
+                logger.print('process_one_frame: fail to find target face')
 
                 # try very slow cnn detector to find more faces
                 if use_cnn != False:
@@ -345,7 +325,7 @@ def process_one_frame(frame, hog_detector, cnn_detector, predictor, frame_result
 
                 # draw red rectangles before leaving
                 if options['output_video'] != False:
-                    draw_face_rectangles(frame, faces, target)
+                    draw_face_rectangles(frame, logger, faces, target)
 
                 return False
 
@@ -355,13 +335,13 @@ def process_one_frame(frame, hog_detector, cnn_detector, predictor, frame_result
             frame_result['target_bottom'] = target.bottom()
 
             if options['output_video'] != False:
-                draw_face_rectangles(frame, faces, target)
+                draw_face_rectangles(frame, logger, faces, target)
 
             # get landmarks of the target face
             landmarks = predictor(gray, target)
 
             if options['output_video'] != False:
-                draw_landmarks(frame, landmarks, 'left-eye', 'circle')
+                draw_landmarks(frame, logger, landmarks, 'left-eye', 'circle')
 
             for n in range(0, 68):
                 x = landmarks.part(n).x
@@ -370,16 +350,16 @@ def process_one_frame(frame, hog_detector, cnn_detector, predictor, frame_result
                 frame_result['mark_%d_x' % (n)] = x
                 frame_result['mark_%d_y' % (n)] = y
 
-            logger_print('process_one_frame: success', end = '\r')
+            logger.print('process_one_frame: success', end = '\r')
             return True
         else:
-            logger_print('process_one_frame: unknown state %s' % (state))
+            logger.print('process_one_frame: unknown state %s' % (state))
             return False
 
     # should not get here
     return False
 
-def process_one_video_internal(input_video_path, input_csv_path, hog_detector, cnn_detector, predictor, options):
+def process_one_video_internal(input_video_path, input_csv_path, hog_detector, cnn_detector, predictor, logger, options):
     # init for video
     csv_index = 0
     frame_index = 0
@@ -393,12 +373,12 @@ def process_one_video_internal(input_video_path, input_csv_path, hog_detector, c
                   'mark_50_x', 'mark_50_y', 'mark_51_x', 'mark_51_y', 'mark_52_x', 'mark_52_y', 'mark_53_x', 'mark_53_y', 'mark_54_x', 'mark_54_y', 'mark_55_x', 'mark_55_y', 'mark_56_x', 'mark_56_y', 'mark_57_x', 'mark_57_y', 'mark_58_x', 'mark_58_y', 'mark_59_x', 'mark_59_y', \
                   'mark_60_x', 'mark_60_y', 'mark_61_x', 'mark_61_y', 'mark_62_x', 'mark_62_y', 'mark_63_x', 'mark_63_y', 'mark_64_x', 'mark_64_y', 'mark_65_x', 'mark_65_y', 'mark_66_x', 'mark_66_y', 'mark_67_x', 'mark_67_y']
 
-    logger_print('Process video:')
+    logger.print('Process video:')
 
     cap = cv2.VideoCapture(input_video_path)
 
     if cap.isOpened() == False:
-        logger_print('  fail to open %s' % (input_video_path))
+        logger.print('  fail to open %s' % (input_video_path))
         return False
 
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -407,14 +387,14 @@ def process_one_video_internal(input_video_path, input_csv_path, hog_detector, c
     fourcc = int(cap.get(cv2.CAP_PROP_FOURCC))
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-    logger_print('  video property:')
-    logger_print('    width       = %d' % (width))
-    logger_print('    height      = %d' % (height))
-    logger_print('    fps         = %d' % (fps))
-    logger_print('    fourcc      = %s' % (decode_fourcc(fourcc)))
-    logger_print('    frame_count = %d' % (frame_count))
+    logger.print('  video property:')
+    logger.print('    width       = %d' % (width))
+    logger.print('    height      = %d' % (height))
+    logger.print('    fps         = %d' % (fps))
+    logger.print('    fourcc      = %s' % (decode_fourcc(fourcc)))
+    logger.print('    frame_count = %d' % (frame_count))
 
-    rotation = auto_detect_rotation(input_video_path, hog_detector)
+    rotation = auto_detect_rotation(input_video_path, hog_detector, logger)
 
     if rotation == cv2.ROTATE_90_CLOCKWISE or rotation == cv2.ROTATE_90_COUNTERCLOCKWISE:
         temp = width
@@ -452,12 +432,12 @@ def process_one_video_internal(input_video_path, input_csv_path, hog_detector, c
 
         frame_index += 1
 
-        logger_print('  frame: (%3d/%d), ' % (frame_index, frame_count), end = '')
+        logger.print('  frame: (%3d/%d), ' % (frame_index, frame_count), end = '')
 
         if options['input_csv'] != False:
             if frame_index == csv_index:
                 # copy dict entry
-                logger_print('copy from csv file', end = '\r')
+                logger.print('copy from csv file', end = '\r')
                 if options['output_csv'] != False:
                     csv_writer.writerow(row)
                 try:
@@ -470,7 +450,7 @@ def process_one_video_internal(input_video_path, input_csv_path, hog_detector, c
         if rotation != -1:
             frame = cv2.rotate(frame, rotation)
 
-        ret = process_one_frame(frame, hog_detector, cnn_detector, predictor, frame_result, options)
+        ret = process_one_frame(frame, hog_detector, cnn_detector, predictor, logger, frame_result, options)
         if ret == False:
             frame_fail_count += 1
         else:
@@ -489,10 +469,10 @@ def process_one_video_internal(input_video_path, input_csv_path, hog_detector, c
             if frame_index >= options['frame_index_max']:
                 break;
 
-    logger_print('Statistic:')
-    logger_print('  total %d frames' % (frame_count))
-    logger_print('  %d frames processed' % (frame_index))
-    logger_print('  %d frames (%3.2f%%) failed' % (frame_fail_count, frame_fail_count * 100.0 / frame_index))
+    logger.print('Statistic:')
+    logger.print('  total %d frames' % (frame_count))
+    logger.print('  %d frames processed' % (frame_index))
+    logger.print('  %d frames (%3.2f%%) failed' % (frame_fail_count, frame_fail_count * 100.0 / frame_index))
 
     # clean-up
     if options['output_video'] != False:
@@ -505,7 +485,7 @@ def process_one_video_internal(input_video_path, input_csv_path, hog_detector, c
 
     return True
 
-def compress_one_video(video_path):
+def compress_one_video(video_path, logger):
     directory, _ = os.path.split(video_path)
     tmp_path = os.path.join(directory, 'tmp.mp4')
 
@@ -518,15 +498,15 @@ def compress_one_video(video_path):
     # prepare ffmpeg command
     cmd = ['ffmpeg', '-i', tmp_path, '-c:v', 'libx264', '-preset', 'veryslow', '-crf', '28', '-c:a', 'copy', video_path]
 
-    logger_print('Compress output video:')
+    logger.print('Compress output video:')
 
     p = subprocess.Popen(cmd, stdout = subprocess.PIPE, stderr = subprocess.PIPE, universal_newlines = True)
     outs, errs = p.communicate()
 
     if p.returncode != 0:
-        logger_print('  compression fail')
-        logger_print('  ffmpeg output:')
-        logger_print(errs)
+        logger.print('  compression fail')
+        logger.print('  ffmpeg output:')
+        logger.print(errs)
 
         if os.path.exists(video_path):
             os.remove(video_path)
@@ -534,16 +514,16 @@ def compress_one_video(video_path):
         os.rename('%s' % tmp_path, '%s' % video_path)
         return False
 
-    logger_print('  compression success')
-    logger_print('  ffmpeg output:')
-    logger_print(outs)
+    logger.print('  compression success')
+    logger.print('  ffmpeg output:')
+    logger.print(outs)
 
     # delete tmp video before leaving
     os.remove(tmp_path)
 
     return True
 
-def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, options):
+def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, logger, options):
     input_csv_path = ''
 
     # first 64KB should be sufficient
@@ -555,8 +535,8 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
     # remove ext part
     file_name, _ = os.path.splitext(file_name)
 
-    logger_print('Check process parameters:')
-    logger_print('  input video path  = %s' % (input_video_path))
+    logger.print('Check process parameters:')
+    logger.print('  input video path  = %s' % (input_video_path))
 
     # generate file name of output video and csv file
     if options['output_csv'] != False:
@@ -565,12 +545,12 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
         output_csv_path = os.path.abspath(output_csv_path)
         options['output_csv_path'] = output_csv_path
 
-        logger_print('  output csv path   = %s' % (output_csv_path))
+        logger.print('  output csv path   = %s' % (output_csv_path))
 
         if os.path.isfile(output_csv_path) != False:
             if options['update_csv'] != False:
                 # partial update csv file
-                logger_print('  csv data will be updated')
+                logger.print('  csv data will be updated')
 
                 directory, _ = os.path.split(output_csv_path)
                 input_csv_path = os.path.join(directory, 'tmp.csv')
@@ -583,12 +563,12 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
                 options['input_csv'] = True
 
             elif options['overwrite_csv'] == False:
-                logger_print('  csv data exists, abort')
+                logger.print('  csv data exists, abort')
 
                 return False
 
             else:
-                logger_print('  csv data will be overwritten')
+                logger.print('  csv data will be overwritten')
     else:
         output_csv_path = None
 
@@ -598,27 +578,24 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
         output_video_path = os.path.abspath(output_video_path)
         options['output_video_path'] = output_video_path
 
-        logger_print('  output video path = %s' % (output_video_path))
+        logger.print('  output video path = %s' % (output_video_path))
 
         if os.path.isfile(output_video_path) != False:
-            if options['overwrite_video'] == False:
-                logger_print('  video data exists, abort')
-                return False
-            logger_print('  video data will be overwritten')
+            logger.print('  video data will be overwritten')
     else:
         output_video_path = None
 
     ret = process_one_video_internal(input_video_path, input_csv_path,
-                                     hog_detector, cnn_detector, predictor,
+                                     hog_detector, cnn_detector, predictor, logger,
                                      options)
     if ret != False and \
        options['output_video'] != False and options['compress_video'] != False:
-        ret = compress_one_video(output_video_path)
+        ret = compress_one_video(output_video_path, logger)
 
     if ret == False:
-        logger_print('Failed to process video file %s\n' % (input_video_path))
+        logger.print('Failed to process video file %s\n' % (input_video_path))
     else:
-        logger_print('Success to process video file %s\n' % (input_video_path))
+        logger.print('Success to process video file %s\n' % (input_video_path))
 
     if options['input_csv'] != False:
         os.remove(input_csv_path)
@@ -628,25 +605,26 @@ def process_one_video(input_video_path, hog_detector, cnn_detector, predictor, o
 
 def main():
     #input_video_path = '/media'
-    input_video_path = '/media/Temp_AIpose20200811'
+    #input_video_path = '/media/Temp_AIpose20200811'
+    input_video_path = '20200429_2B.mp4'
 
     # translate to abs path
     input_video_path = os.path.abspath(input_video_path)
 
     # check data directory
     if check_data_directory() == False:
-        logger_print('  fail to check data directory')
+        logger.print('  fail to check data directory')
         return
 
     # start the logger
-    logger_start()
+    logger = Logger()
 
     # init for all videos
     hog_detector = dlib.get_frontal_face_detector()
     cnn_detector = dlib.cnn_face_detection_model_v1('./mmod_human_face_detector.dat')
     predictor = dlib.shape_predictor('shape_predictor_68_face_landmarks.dat')
 
-    logger_print('')
+    logger.print('')
 
     if os.path.isfile(input_video_path) != False:
 
@@ -658,7 +636,6 @@ def main():
 
             # do not output video
             'output_video': False,
-            'overwrite_video': False,
 
             # debug options
             'frame_index_max': -1,
@@ -669,7 +646,7 @@ def main():
             'input_csv': False,
         }
 
-        ret = process_one_video(input_video_path, hog_detector, cnn_detector, predictor, options)
+        ret = process_one_video(input_video_path, hog_detector, cnn_detector, predictor, logger, options)
 
     elif os.path.isdir(input_video_path):
 
@@ -696,7 +673,6 @@ def main():
 
                     # do not output video
                     'output_video': False,
-                    'overwrite_video': False,
 
                     # debug options
                     'frame_index_max': -1,
@@ -707,13 +683,10 @@ def main():
                     'input_csv': False,
                 }
 
-                ret = process_one_video(file_path, hog_detector, cnn_detector, predictor, options)
+                ret = process_one_video(file_path, hog_detector, cnn_detector, predictor, logger, options)
 
     else:
-        logger_print('Fail to process input path %s' % (input_video_path))
-
-    # stop the logger
-    logger_stop()
+        logger.print('Fail to process input path %s' % (input_video_path))
 
     return
 
@@ -744,7 +717,6 @@ def get_csv_data_file(video_path):
 
         # do not output video
         'output_video': False,
-        'overwrite_video': False,
 
         # debug options
         'frame_index_max': -1,
@@ -757,19 +729,16 @@ def get_csv_data_file(video_path):
         return None
 
     # start the logger
-    logger_start()
+    logger = Logger()
 
     # init for video
     hog_detector = dlib.get_frontal_face_detector()
     cnn_detector = dlib.cnn_face_detection_model_v1('./mmod_human_face_detector.dat')
     predictor = dlib.shape_predictor('shape_predictor_68_face_landmarks.dat')
 
-    logger_print('')
+    logger.print('')
 
-    ret = process_one_video(video_path, hog_detector, cnn_detector, predictor, options)
-
-    # stop the logger
-    logger_stop()
+    ret = process_one_video(video_path, hog_detector, cnn_detector, predictor, logger, options)
 
     if ret == False:
         return None
