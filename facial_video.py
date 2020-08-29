@@ -4,6 +4,7 @@ from facial_engine import FacialEngine
 from scipy.spatial import distance as dist
 import csv
 import cv2
+import numpy
 import os
 
 
@@ -142,7 +143,7 @@ class FacialVideo:
 
         return ear
 
-    def calculate_min_avg_max_ear(self, eye):
+    def calculate_min_avg_max_ear(self, eye, start = 0, end = 0):
         total_ear = 0.0
         total_frame = 0
 
@@ -156,6 +157,14 @@ class FacialVideo:
 
         for csv_row in csv_reader:
             landmarks = []
+
+            index = int(csv_row['index'])
+
+            if index < start:
+                continue
+            if end != 0:
+                if index >= end:
+                    break
 
             for n in range(0, 68):
                 x = int(csv_row['mark_%d_x' % (n)])
