@@ -386,6 +386,7 @@ class FacialEngine:
         degrees = [-1, cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_180, cv2.ROTATE_90_COUNTERCLOCKWISE]
         text = ['none', '90 degree clockwise', '180 degree', '90 degree counter clockwise']
         counts = [0, 0, 0, 0]
+        frame_index = 0
 
         cap = cv2.VideoCapture(self.input_video_path)
 
@@ -397,18 +398,29 @@ class FacialEngine:
                 # no frame to process
                 break;
 
+            frame_index += 1
+            self.logger.print('    detecting frame %d' % (frame_index), '\r')
+
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
             for i in range(len(degrees)):
                 if degrees[i] != -1:
                     rotate = cv2.rotate(gray, degrees[i])
                     faces = self.hog_detector(rotate)
+                    height, width = rotate.shape
                 else:
                     faces = self.hog_detector(gray)
+                    height, width = gray.shape
 
-                faces_num = len(faces)
-                if faces_num != 0:
-                    counts[i] += faces_num
+                for face in faces:
+                    x1 = face.left()
+                    y1 = face.top()
+                    x2 = face.right()
+                    y2 = face.bottom()
+
+                    # does not count if the face is too small
+                    if x2 - x1 > width * 0.1 and y2 - y1 > height * 0.1:
+                        counts[i] += 1
 
                 if counts[i] >= 5:
                     self.logger.print('    need to rotate %s' % (text[i]))
