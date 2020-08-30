@@ -116,9 +116,18 @@ def main():
     #print('buffer_len: %d' % (buffer_len))
     ears_buffer = [0.0] * 3
 
+    face_rect = fv.find_face_rect(start_frame, end_frame)
+    p1 = face_rect[0] # left, top
+    p2 = face_rect[1] # right, bottom
+
+    print('face: %s, %s' % (str(p1), str(p2)))
+
+    width = p2[0] - p1[0]
+    height = p2[1] - p1[1]
+
     # always use mp4
     video_writer = cv2.VideoWriter(output_video_path, cv2.VideoWriter_fourcc(*'mp4v'),
-                                   fv.fps, (fv.width, fv.height))
+                                   fv.fps, (width, height))
 
     while True:
         ret, frame = fv.read()
@@ -169,7 +178,9 @@ def main():
         else:
             print('  frame: %3d, no landmarks' % (frame_index))
 
-        video_writer.write(frame)
+        crop = frame[p1[1]:p2[1], p1[0]:p2[0]]
+        #cv2.imshow('Video', crop)
+        video_writer.write(crop)
 
     video_writer.release()
 
