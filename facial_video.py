@@ -185,3 +185,43 @@ class FacialVideo:
 
         return min_ear, total_ear / total_frame, max_ear
 
+    def find_face_rect(self, start = 0, end = 0):
+        rect_left = self.width
+        rect_right = 0
+        rect_top = self.height
+        rect_bottom = 0
+
+        # open the csv file
+        csvfile = open(self.__csv_path, 'r', newline = '')
+        csv_reader = csv.DictReader(csvfile)
+
+        for csv_row in csv_reader:
+            index = int(csv_row['index'])
+
+            if index < start:
+                continue
+            if end != 0:
+                if index >= end:
+                    break
+
+            left = int(csv_row['target_left'])
+            top = int(csv_row['target_top'])
+            right = int(csv_row['target_right'])
+            bottom = int(csv_row['target_bottom'])
+
+            if left < rect_left:
+                rect_left = left
+            if top < rect_top:
+                rect_top = top
+            if right > rect_right:
+                rect_right = right
+            if bottom > rect_bottom:
+                rect_bottom = bottom
+
+        csvfile.close()
+
+        rect = []
+        rect.append((rect_left, rect_top))
+        rect.append((rect_right, rect_bottom))
+
+        return rect
