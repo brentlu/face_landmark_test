@@ -20,7 +20,7 @@ class FacialVideo:
         self.frame_count = int(self.__cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
         engine = FacialEngine(video_path)
-        self.__rotation = engine.auto_detect_rotation()
+        self.__rotation = engine.get_video_rotation()
 
         if self.__rotation == cv2.ROTATE_90_CLOCKWISE or self.__rotation == cv2.ROTATE_90_COUNTERCLOCKWISE:
             temp = self.width

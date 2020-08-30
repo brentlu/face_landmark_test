@@ -1,11 +1,13 @@
 #!/usr/bin/python3
 
+from tempfile import NamedTemporaryFile
 import csv
 import cv2
 import dlib
 import hashlib
 import magic
 import os
+import shutil
 import time
 
 
@@ -51,6 +53,21 @@ class Logger:
 
         return
 
+#
+# use case 1: process one video data
+#
+#   engine = FacialEngine(video_path)
+#
+#   ret = engine.configure()
+#   ret = engine.process_video()
+#
+# use case 2: get rotation info and csv data file
+#
+#   engine = FacialEngine(video_path)
+#
+#   rotation = engine.get_video_rotation()
+#   csv_path = engine.get_csv_data_file()
+#
 class FacialEngine:
     def __init__(self, video_path):
         # translate to abs path
@@ -269,7 +286,7 @@ class FacialEngine:
         self.logger.print('    fourcc      = %s' % (self.decode_fourcc(fourcc)))
         self.logger.print('    frame_count = %d' % (frame_count))
 
-        rotation = self.auto_detect_rotation()
+        rotation = self.get_video_rotation()
 
         if rotation == cv2.ROTATE_90_CLOCKWISE or rotation == cv2.ROTATE_90_COUNTERCLOCKWISE:
             temp = width
@@ -665,6 +682,87 @@ class FacialEngine:
             return None
 
         return csv_path
+
+    def get_video_rotation(self):
+        csv_fields = ['file_name', 'md5_digest', 'rotation']
+
+        # remove directory and ext part
+        _, video_name = os.path.split(self.input_video_path)
+        video_name, _ = os.path.splitext(video_name)
+
+        meta_csv_path = self.get_meta_csv_path()
+
+        # try to find the rotation in meta-csv file
+        if os.path.isfile(meta_csv_path) != False:
+            with open(meta_csv_path, 'r', newline = '') as csv_file:
+                csv_reader = csv.DictReader(csv_file)
+                for row in csv_reader:
+                    file_name = row['file_name']
+                    md5_digest = row['md5_digest']
+
+                    if video_name == file_name and str(self.input_video_hash) == md5_digest:
+                        rotation = row['rotation']
+                        if rotation == 'none':
+                            return -1
+                        elif rotation == '90c':
+                            return cv2.ROTATE_90_CLOCKWISE
+                        elif rotation == '180':
+                            return cv2.ROTATE_180
+                        elif rotation == '90cc':
+                            return cv2.ROTATE_90_COUNTERCLOCKWISE
+
+        # not in meta-csv file, need to detect it
+        rotation = self.auto_detect_rotation()
+
+        # prepare the dict
+        csv_row = {
+            'file_name': video_name,
+            'md5_digest' : str(self.input_video_hash)
+        }
+
+        if rotation == -1:
+            csv_row['rotation'] = 'none'
+        elif rotation == cv2.ROTATE_90_CLOCKWISE:
+            csv_row['rotation'] = '90c'
+        elif rotation == cv2.ROTATE_180:
+            csv_row['rotation'] = '180'
+        elif rotation == cv2.ROTATE_90_COUNTERCLOCKWISE:
+            csv_row['rotation'] = '90cc'
+
+        # initial the cvs file
+        if os.path.isfile(meta_csv_path) == False:
+            with open(meta_csv_path, 'w', newline='') as csv_file_write:
+                csv_writer = csv.DictWriter(csv_file_write, fieldnames = csv_fields)
+                csv_writer.writeheader()
+                csv_writer.writerow(csv_row)
+
+            return rotation
+
+        # update the record in csv file if found
+        tempfile = NamedTemporaryFile(mode = 'w', delete = False)
+
+        with open(meta_csv_path, 'r') as csvfile, tempfile:
+            csv_reader = csv.DictReader(csvfile, fieldnames = csv_fields)
+            csv_writer = csv.DictWriter(tempfile, fieldnames = csv_fields)
+            for row in csv_reader:
+
+                if video_name != file_name or str(self.input_video_hash) != md5_digest:
+                    # copy the rows
+                    csv_writer.writerow(row)
+
+            # append in the end of file
+            csv_writer.writerow(csv_row)
+
+        shutil.move(tempfile.name, meta_csv_path)
+
+        return rotation
+
+    def get_meta_csv_path(self):
+        meta_csv_name = 'meta-video.csv'
+        meta_csv_path = os.path.join(get_data_path('csv'), meta_csv_name)
+        meta_csv_path = os.path.abspath(meta_csv_path)
+
+        return meta_csv_path
 
 def get_data_path(directory):
     if directory == 'data':
