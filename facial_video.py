@@ -183,7 +183,10 @@ class FacialVideo:
 
         csvfile.close()
 
-        return min_ear, total_ear / total_frame, max_ear
+        if total_frame != 0:
+            return True, min_ear, total_ear / total_frame, max_ear
+        else:
+            return False, 0.0, 0.0, 0.0
 
     def find_face_rect(self, start = 0, end = 0):
         rect_left = self.width

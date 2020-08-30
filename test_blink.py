@@ -2,7 +2,10 @@
 
 from facial_video import FacialVideo
 from numpy import ndarray
+import argparse
+import csv
 import cv2
+import magic
 import matplotlib.pyplot as plt
 import os
 import time
@@ -35,7 +38,7 @@ def log_start(data_path, input_video_path):
 
     log_file = open(log_path, 'w')
 
-    return log_file
+    return log_file, timestamp
 
 def log_stop(log_file):
     log_file.close()
@@ -142,8 +145,10 @@ def test_blink_fixed_delta(buffer, ear, log_file):
 
     return ret, delta_max
 
-def process_one_video(input_video_path, data_path, start_time, end_time):
+def process_one_video(input_video_path, data_path, start_time = 0.0, end_time = 0.0):
     draw_plot = False
+
+    frame_no_landmarks = 0
 
     draw_blink = 0
     blink_count = 0
@@ -151,10 +156,10 @@ def process_one_video(input_video_path, data_path, start_time, end_time):
     times = []
     deltas = []
 
-    log_file = log_start(data_path, input_video_path)
+    log_file, timestamp = log_start(data_path, input_video_path)
 
     log_print(log_file, 'Configuration:')
-    log_print(log_file, '  input video path : %s' % (input_video_path))
+    log_print(log_file, '  input video path:  %s' % (input_video_path))
 
     # remove directory part
     _, file_name = os.path.split(input_video_path)
@@ -162,7 +167,7 @@ def process_one_video(input_video_path, data_path, start_time, end_time):
     # remove ext part
     file_name, _ = os.path.splitext(file_name)
 
-    file_name = '%s-blink.mp4' % (file_name)
+    file_name = '%s-%s.mp4' % (file_name, timestamp)
     output_video_path = os.path.join(data_path, file_name)
     output_video_path = os.path.abspath(output_video_path)
 
@@ -171,11 +176,15 @@ def process_one_video(input_video_path, data_path, start_time, end_time):
     fv = FacialVideo(input_video_path)
 
     start_frame = int(start_time * fv.fps)
-    end_frame = int(end_time * fv.fps)
+    if end_time == 0.0:
+        end_frame = fv.frame_count
+    else:
+        end_frame = int(end_time * fv.fps)
 
-    min_ear, avg_ear, max_ear = fv.calculate_min_avg_max_ear('left', start_frame, end_frame)
+    ret, min_ear, avg_ear, max_ear = fv.calculate_min_avg_max_ear('left', start_frame, end_frame)
 
-    log_print(log_file, '  ear(left):  min %f, avg %f, max %f' % (min_ear, avg_ear, max_ear))
+    if ret != False:
+        log_print(log_file, '  ear(left):  min %f, avg %f, max %f' % (min_ear, avg_ear, max_ear))
 
     #threshold = min_ear * 0.7 + max_ear * 0.3
     #print('  fixed threshold: %f' % (threshold))
@@ -251,13 +260,17 @@ def process_one_video(input_video_path, data_path, start_time, end_time):
                 draw_blink -= 1
         else:
             log_print(log_file, '  frame: %3d, no landmarks' % (frame_index))
+            frame_no_landmarks += 1
 
         crop = frame[p1[1]:p2[1], p1[0]:p2[0]]
         video_writer.write(crop)
 
     video_writer.release()
 
-    log_print(log_file, 'Total %d blinks found' % (blink_count))
+    log_print(log_file, 'Statistic:')
+    log_print(log_file, '  total %d frames processed' % (end_frame - start_frame))
+    log_print(log_file, '  %d frames (%3.2f%%) has no landmarks' % (frame_no_landmarks, (frame_no_landmarks * 100.0) / (end_frame - start_frame)))
+    log_print(log_file, '  %d blinks found' % (blink_count))
     log_print(log_file, 'Process complete')
 
     if draw_plot != False:
@@ -271,14 +284,35 @@ def process_one_video(input_video_path, data_path, start_time, end_time):
 
     log_stop(log_file)
 
-    return
+    return True
+
+def process_training_csv(csv_path, data_path):
+
+    _, filename = os.path.split(csv_path)
+    print('process_training_csv: %s' % (filename))
+
+    with open(csv_path, 'r', newline = '') as csv_file:
+        csv_reader = csv.DictReader(csv_file)
+        for row in csv_reader:
+            video_path = row['file_name']
+            start_time = float(row['start_time'])
+            end_time = float(row['end_time'])
+
+            ret = process_one_video(video_path, data_path, start_time, end_time)
+            if ret == False:
+                return False
+
+    print('  success')
+    return True
 
 def main():
-    input_video_path = '/media/Temp_AIpose20200806/SJCAM/20200806_1AB.mp4'
+    start_time = 0.0
+    end_time = 0.0
 
+
+    # check data directory first
     data_path = os.path.abspath('./blink_data')
     if os.path.isdir(data_path) == False:
-        # create data directory
         try:
             print('create data directory')
             os.mkdir(data_path)
@@ -286,10 +320,75 @@ def main():
             print('fail to create data directory')
             return False
 
-    start_time = 40.0
-    end_time = 70.0
+    # parse argument
+    parser = argparse.ArgumentParser()
+    parser.add_argument('path', help = 'path to a video file, a directory, or a training recipe file')
 
-    process_one_video(input_video_path, data_path, start_time, end_time)
+    parser.add_argument('-s', '--start_time', help = 'start time (sec)')
+    parser.add_argument('-e', '--end_time', help = 'end time (sec)')
+
+
+    args = parser.parse_args()
+
+    input_video_path = args.path
+
+    print('User input:')
+    print('  input path: %s' % (input_video_path))
+
+    if args.start_time != None:
+        start_time = float(args.start_time)
+        print('  start time: %.3f' % (start_time))
+
+    if args.end_time != None:
+        end_time = float(args.end_time)
+        print('  end time:   %.3f' % (end_time))
+
+    _, ext = os.path.splitext(input_video_path)
+
+    if ext == '.csv':
+        if args.start_time != None:
+            print('  ignore start time')
+        if args.end_time != None:
+            print('  ignore end time')
+
+        # could be a training recipe
+        ret = process_training_csv(input_video_path, data_path)
+
+    elif os.path.isfile(input_video_path) != False:
+        mime = magic.Magic(mime=True)
+
+        file_mine = mime.from_file(input_video_path)
+        if file_mine.find('video') == -1:
+            print('  not a video file')
+            return False
+
+        ret = process_one_video(input_video_path, data_path, start_time, end_time)
+
+    elif os.path.isdir(input_video_path):
+        if args.start_time != None:
+            print('  ignore start time')
+        if args.end_time != None:
+            print('  ignore end time')
+
+        # looking for any video file which name ends with a 'A' or 'B' character
+        prog = re.compile(r'.*[AB]\..+')
+
+        mime = magic.Magic(mime=True)
+        for root, dirs, files in os.walk(input_video_path):
+            for file in files:
+                file_path = os.path.join(root, file)
+
+                file_mine = mime.from_file(file_path)
+                if file_mine.find('video') == -1:
+                    continue
+
+                if prog.match(file) == None:
+                    continue
+
+                ret = process_one_video(input_video_path, data_path)
+
+    else:
+        print('Unrecognized path')
 
     return
 
