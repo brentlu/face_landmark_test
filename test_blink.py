@@ -113,11 +113,10 @@ def test_blink_fixed_threshold(threshold, frame_index, ear, log_file):
     log_print(log_file, 'blink: False')
     return False
 
-def test_blink_fixed_delta(buffer, ear, log_file):
+def test_blink_fixed_delta(buffer, ear):
     delta = 0.0
     delta_max = 1.0
     ret = False
-    end = '\n'
 
     buffer_num = len(buffer)
 
@@ -138,11 +137,6 @@ def test_blink_fixed_delta(buffer, ear, log_file):
         for n in range(0, buffer_num):
             buffer[n] = 0.0
 
-    if ret != False:
-        end = ''
-
-    log_print(log_file, 'delta %+.6f, blink: %s' % (delta_max, str(ret)), end = end)
-
     return ret, delta_max
 
 def process_one_video(input_video_path, data_path, start_time = 0.0, end_time = 0.0):
@@ -150,7 +144,8 @@ def process_one_video(input_video_path, data_path, start_time = 0.0, end_time = 
 
     frame_no_landmarks = 0
 
-    draw_blink = 0
+    draw_rect = 0
+    draw_text = 0
     blink_count = 0
 
     times = []
@@ -184,7 +179,7 @@ def process_one_video(input_video_path, data_path, start_time = 0.0, end_time = 
     ret, min_ear, avg_ear, max_ear = fv.calculate_min_avg_max_ear('left', start_frame, end_frame)
 
     if ret != False:
-        log_print(log_file, '  ear(left):  min %f, avg %f, max %f' % (min_ear, avg_ear, max_ear))
+        log_print(log_file, '  ear(left): min %f, avg %f, max %f' % (min_ear, avg_ear, max_ear))
 
     #threshold = min_ear * 0.7 + max_ear * 0.3
     #print('  fixed threshold: %f' % (threshold))
@@ -233,12 +228,14 @@ def process_one_video(input_video_path, data_path, start_time = 0.0, end_time = 
             log_print(log_file, '  frame: %3d, time_stamp: %.3f, ear(left): %.6f, ' % (frame_index, time_stamp, ear_left), end = '')
 
             #blink = test_blink_fixed_threshold(threshold, frame_index, ear_left, log_file)
-            blink, delta = test_blink_fixed_delta(ears_buffer, ear_left, log_file)
+            blink, delta = test_blink_fixed_delta(ears_buffer, ear_left)
 
-            if draw_blink > 0 and blink != False:
+            if blink == False:
+                log_print(log_file, 'delta %+.6f' % (delta))
+            elif draw_rect > 0:
                 # this one is false blink
                 blink = False
-                log_print(log_file, ', false blink')
+                log_print(log_file, 'delta %+.6f, blink found, false blink)' % (delta))
 
             # save data for plot
             if draw_plot != False:
@@ -251,13 +248,21 @@ def process_one_video(input_video_path, data_path, start_time = 0.0, end_time = 
 
             # draw rect if blink found
             if blink != False:
-                draw_blink = 3 # draw three frames
+                draw_rect = 3 # draw the rect for three frames
+                draw_text = 6 # draw the text for six frames
                 blink_count += 1
-                log_print(log_file, '')
+                log_print(log_file, 'delta %+.6f, blink found, count %d' % (delta, blink_count))
 
-            if draw_blink > 0:
+            if draw_rect > 0:
                 cv2.rectangle(frame, rect[0], rect[1], (0, 255, 0), 3)
-                draw_blink -= 1
+                draw_rect -= 1
+
+            if draw_text > 0:
+                text = 'Blink: %d' % (blink_count)
+                cv2.putText(frame, str(text), (p1[0] + 10, p1[1] + 50), cv2.FONT_HERSHEY_SIMPLEX, 1.0,
+                            (255, 0, 0), 2, cv2.LINE_AA, False);
+                draw_text -= 1
+
         else:
             log_print(log_file, '  frame: %3d, no landmarks' % (frame_index))
             frame_no_landmarks += 1
