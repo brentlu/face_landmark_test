@@ -12,22 +12,29 @@ import time
 
 
 class Logger:
-    def __init__(self):
+    def __init__(self, video_path):
         print('Start logger:')
 
-        # get current time (UTC time)
-        now = time.gmtime()
+        # remove directory part
+        _, log_name = os.path.split(video_path)
 
-        timestamp = time.strftime('%Y-%m%d-%H%M', now)
+        # remove ext part
+        log_name, _ = os.path.splitext(log_name)
 
-        log_path_base = os.path.join(get_data_path('log'), timestamp)
-        log_path_base = os.path.abspath(log_path_base)
+        while True:
+            # get current time (local time)
+            now = time.localtime()
 
-        # find a free slot
-        for n in range(1, 100):
-            log_path = '%s-%s.log' % (log_path_base, str(n))
+            timestamp = time.strftime('%Y-%m%d-%H%M', now)
+
+            log_name = '%s-%s.log' % (log_name, timestamp)
+            log_path = os.path.join(get_data_path('log'), log_name)
+            log_path = os.path.abspath(log_path)
+
             if os.path.exists(log_path) == False:
                 break
+
+            time.sleep(3)
 
         self.__file = open(log_path, 'w')
 
@@ -90,7 +97,7 @@ class FacialEngine:
             return
 
         # start the logger
-        self.logger = Logger()
+        self.logger = Logger(video_path)
 
         # init for all videos
         self.hog_detector = dlib.get_frontal_face_detector()
