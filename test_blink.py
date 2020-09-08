@@ -176,10 +176,13 @@ def process_one_video(input_video_path, data_path, start_time = 0.0, end_time = 
     else:
         end_frame = int(end_time * fv.fps)
 
-    ret, min_ear, avg_ear, max_ear = fv.calculate_min_avg_max_ear('left', start_frame, end_frame)
+    ret = fv.update_static_data(start_frame, end_frame)
 
     if ret != False:
-        log_print(log_file, '  ear(left): min %f, avg %f, max %f' % (min_ear, avg_ear, max_ear))
+        log_print(log_file, '  eye aspect ratio(left):  min %.3f, avg %.3f, max %.3f' % (fv.min_ear[0], fv.avg_ear[0], fv.max_ear[0]))
+        log_print(log_file, '  eye aspect ratio(right): min %.3f, avg %.3f, max %.3f' % (fv.min_ear[1], fv.avg_ear[1], fv.max_ear[1]))
+        log_print(log_file, '  eye width(left):         min %.3f, avg %.3f, max %.3f' % (fv.min_ew[0], fv.avg_ew[0], fv.max_ew[0]))
+        log_print(log_file, '  eye width(right):        min %.3f, avg %.3f, max %.3f' % (fv.min_ew[1], fv.avg_ew[1], fv.max_ew[1]))
 
     #threshold = min_ear * 0.7 + max_ear * 0.3
     #print('  fixed threshold: %f' % (threshold))
@@ -223,19 +226,22 @@ def process_one_video(input_video_path, data_path, start_time = 0.0, end_time = 
             landmarks = fv.get_landmarks()
             rect = fv.get_rect()
 
-            ear_left = fv.get_ear_value('left')
+            ear_left = fv.get_eye_aspect_ratio('left')
+            ear_right = fv.get_eye_aspect_ratio('right')
+            ew_left = fv.get_eye_width('left')
+            ew_right = fv.get_eye_width('right')
 
-            log_print(log_file, '  frame: %3d, time_stamp: %.3f, ear(left): %.6f, ' % (frame_index, time_stamp, ear_left), end = '')
+            log_print(log_file, '  frame: %3d, time: %.3f, ear: %.3f %.3f, width: %3.2f%% %3.2f%% ' % (frame_index, time_stamp, ear_left, ear_right, ew_left * 100.0 / fv.max_ew[0], ew_right * 100.0 / fv.max_ew[1]), end = '')
 
             #blink = test_blink_fixed_threshold(threshold, frame_index, ear_left, log_file)
             blink, delta = test_blink_fixed_delta(ears_buffer, ear_left)
 
             if blink == False:
-                log_print(log_file, 'delta %+.6f' % (delta))
+                log_print(log_file, 'delta %+.3f' % (delta))
             elif draw_rect > 0:
                 # this one is false blink
                 blink = False
-                log_print(log_file, 'delta %+.6f, blink found, false blink)' % (delta))
+                log_print(log_file, 'delta %+.3f, blink found, false blink)' % (delta))
 
             # save data for plot
             if draw_plot != False:
@@ -251,7 +257,7 @@ def process_one_video(input_video_path, data_path, start_time = 0.0, end_time = 
                 draw_rect = 3 # draw the rect for three frames
                 draw_text = 6 # draw the text for six frames
                 blink_count += 1
-                log_print(log_file, 'delta %+.6f, blink found, count %d' % (delta, blink_count))
+                log_print(log_file, 'delta %+.3f, blink found, count %d' % (delta, blink_count))
 
             if draw_rect > 0:
                 cv2.rectangle(frame, rect[0], rect[1], (0, 255, 0), 3)

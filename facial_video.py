@@ -48,6 +48,16 @@ class FacialVideo:
             except StopIteration:
                 self.__csv_index = self.frame_count + 1
 
+        # eye aspect ratio
+        self.min_ear = [1.0, 1.0]
+        self.max_ear = [0.0, 0.0]
+        self.avg_ear = [0.0, 0.0]
+
+        # eye width
+        self.min_ew = [1000.0, 1000.0]
+        self.max_ew = [0.0, 0.0]
+        self.avg_ew = [0.0, 0.0]
+
     def __del__(self):
         self.__csv_file.close()
         self.__cap.release()
@@ -116,7 +126,7 @@ class FacialVideo:
     def get_time_stamp(self):
         return self.__time_stamp
 
-    def get_ear_value(self, eye, landmarks = None):
+    def get_eye_aspect_ratio(self, eye, landmarks = None):
         if landmarks == None:
             landmarks = self.__landmarks
 
@@ -143,13 +153,24 @@ class FacialVideo:
 
         return ear
 
-    def calculate_min_avg_max_ear(self, eye, start = 0, end = 0):
-        total_ear = 0.0
-        total_frame = 0
+    def get_eye_width(self, eye, landmarks = None):
+        if landmarks == None:
+            landmarks = self.__landmarks
 
-        ear = 0.0
-        min_ear = 1.0
-        max_ear = 0.0
+        if len(landmarks) != 68:
+            print('incomplete landmark')
+
+        if eye == 'left':
+            return dist.euclidean(landmarks[42], landmarks[45])
+        elif eye == 'right':
+            return dist.euclidean(landmarks[39], landmarks[36])
+        else:
+            print('get_eye_width: unknown eye %s' % (eye))
+
+        return 0.0
+
+    def update_static_data(self, start = 0, end = 0):
+        total_frame = 0
 
         # open the csv file
         csvfile = open(self.__csv_path, 'r', newline = '')
@@ -172,21 +193,54 @@ class FacialVideo:
 
                 landmarks.append((x, y))
 
-            ear = self.get_ear_value(eye, landmarks)
-            if ear < min_ear:
-                min_ear = ear
-            if ear > max_ear:
-                max_ear = ear
+            # ear of left eye
+            ear = self.get_eye_aspect_ratio('left', landmarks)
+            if ear < self.min_ear[0]:
+                self.min_ear[0] = ear
+            if ear > self.max_ear[0]:
+                self.max_ear[0] = ear
 
-            total_ear += ear
+            self.avg_ear[0] += ear
+
+            # ear of right eye
+            ear = self.get_eye_aspect_ratio('right', landmarks)
+            if ear < self.min_ear[1]:
+                self.min_ear[1] = ear
+            if ear > self.max_ear[1]:
+                self.max_ear[1] = ear
+
+            self.avg_ear[1] += ear
+
+            # width of left eye
+            ew = self.get_eye_width('left', landmarks)
+            if ew < self.min_ew[0]:
+                self.min_ew[0] = ew
+            if ew > self.max_ew[0]:
+                self.max_ew[0] = ew
+
+            self.avg_ew[0] += ew
+
+            # width of right eye
+            ew = self.get_eye_width('right', landmarks)
+            if ew < self.min_ew[1]:
+                self.min_ew[1] = ew
+            if ew > self.max_ew[1]:
+                self.max_ew[1] = ew
+
+            self.avg_ew[1] += ew
+
             total_frame += 1
 
         csvfile.close()
 
         if total_frame != 0:
-            return True, min_ear, total_ear / total_frame, max_ear
-        else:
-            return False, 0.0, 0.0, 0.0
+            self.avg_ear[0] /= total_frame
+            self.avg_ear[1] /= total_frame
+            self.avg_ew[0] /= total_frame
+            self.avg_ew[1] /= total_frame
+            return True
+
+        return False
 
     def find_face_rect(self, start = 0, end = 0):
         rect_left = self.width
