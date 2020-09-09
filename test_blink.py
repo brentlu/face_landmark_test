@@ -45,29 +45,14 @@ def log_stop(log_file):
 
     return
 
-skip_next_timestamp = False
-
 def log_print(log_file, string, end = '\n'):
-    global skip_next_timestamp
-
     # print to screen directly
     print(string, end = end)
 
     if end == '\r':
         end = '\n'
 
-    if skip_next_timestamp != False:
-        timestamp = ''
-        skip_next_timestamp = False
-    else:
-        # get current time (local time)
-        now = time.localtime()
-        timestamp = time.strftime('%Y-%m-%dT%H:%M:%S%z', now)
-
-    log_file.write('%s %s%s' % (timestamp, string, end))
-
-    if end == '':
-        skip_next_timestamp = True
+    log_file.write('%s%s' % (string, end))
 
     return
 
