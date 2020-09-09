@@ -258,6 +258,18 @@ def process_one_video(input_video_path, data_path, start_time = 0.0, end_time = 
             log_print(log_file, '  frame: %3d, no landmarks' % (frame_index))
             frame_no_landmarks += 1
 
+            buffer_num = len(ears_buffer)
+
+            for n in range(1, buffer_num):
+                ears_buffer[n - 1] = ears_buffer[n]
+
+            ears_buffer[buffer_num - 1] = 0.0
+
+            if draw_rect > 0:
+                draw_rect -= 1
+            if draw_text > 0:
+                draw_text -= 1
+
         crop = frame[p1[1]:p2[1], p1[0]:p2[0]]
         video_writer.write(crop)
 
