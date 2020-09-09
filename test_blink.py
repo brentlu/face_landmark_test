@@ -207,7 +207,7 @@ def process_one_video(input_video_path, data_path, start_time = 0.0, duration = 
             break
 
         if fv.available() != False:
-            time_stamp = fv.get_time_stamp()
+            time_stamp = (frame_index - start_frame) / fv.fps
             landmarks = fv.get_landmarks()
             rect = fv.get_rect()
 
