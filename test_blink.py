@@ -124,7 +124,7 @@ def test_blink_fixed_delta(buffer, ear):
 
     return ret, delta_max
 
-def process_one_video(input_video_path, data_path, start_time = 0.0, end_time = 0.0):
+def process_one_video(input_video_path, data_path, start_time = 0.0, duration = 0.0):
     draw_plot = False
 
     frame_no_landmarks = 0
@@ -156,10 +156,10 @@ def process_one_video(input_video_path, data_path, start_time = 0.0, end_time = 
     fv = FacialVideo(input_video_path)
 
     start_frame = int(start_time * fv.fps)
-    if end_time == 0.0:
+    if duration == 0.0:
         end_frame = fv.frame_count
     else:
-        end_frame = int(end_time * fv.fps)
+        end_frame = start_frame + int(duration * fv.fps)
 
     ret = fv.update_static_data(start_frame, end_frame)
 
@@ -304,9 +304,9 @@ def process_training_csv(csv_path, data_path):
         for row in csv_reader:
             video_path = row['file_name']
             start_time = float(row['start_time'])
-            end_time = float(row['end_time'])
+            duration = float(row['duration'])
 
-            ret = process_one_video(video_path, data_path, start_time, end_time)
+            ret = process_one_video(video_path, data_path, start_time, duration)
             if ret == False:
                 return False
 
@@ -315,7 +315,7 @@ def process_training_csv(csv_path, data_path):
 
 def main():
     start_time = 0.0
-    end_time = 0.0
+    duration = 0.0
 
 
     # check data directory first
@@ -333,7 +333,7 @@ def main():
     parser.add_argument('path', help = 'path to a video file, a directory, or a training recipe file')
 
     parser.add_argument('-s', '--start_time', help = 'start time (sec)')
-    parser.add_argument('-e', '--end_time', help = 'end time (sec)')
+    parser.add_argument('-d', '--duration', help = 'duration (sec)')
 
 
     args = parser.parse_args()
@@ -347,17 +347,17 @@ def main():
         start_time = float(args.start_time)
         print('  start time: %.3f' % (start_time))
 
-    if args.end_time != None:
-        end_time = float(args.end_time)
-        print('  end time:   %.3f' % (end_time))
+    if args.duration != None:
+        duration = float(args.duration)
+        print('  duration:   %.3f' % (duration))
 
     _, ext = os.path.splitext(input_video_path)
 
     if ext == '.csv':
         if args.start_time != None:
             print('  ignore start time')
-        if args.end_time != None:
-            print('  ignore end time')
+        if args.duration != None:
+            print('  ignore duration')
 
         # could be a training recipe
         ret = process_training_csv(input_video_path, data_path)
@@ -370,13 +370,13 @@ def main():
             print('  not a video file')
             return False
 
-        ret = process_one_video(input_video_path, data_path, start_time, end_time)
+        ret = process_one_video(input_video_path, data_path, start_time, duration)
 
     elif os.path.isdir(input_video_path):
         if args.start_time != None:
             print('  ignore start time')
-        if args.end_time != None:
-            print('  ignore end time')
+        if args.duration != None:
+            print('  ignore duration')
 
         # looking for any video file which name ends with a 'A' or 'B' character
         prog = re.compile(r'.*[AB]\..+')
