@@ -1,18 +1,21 @@
 #!/usr/bin/python3
 
 from facial_video import FacialVideo
+from tempfile import NamedTemporaryFile
 import argparse
 import csv
 import magic
 import os
+import shutil
 
 
 def process_one_video(input_video_path, duration = 30.0):
+    start_frame = 0
     found = 0
 
     print('Configuration:')
-    print('  input video path:  %s' % (input_video_path))
-    print('  duration:  %s' % (duration))
+    print('  input video path: %s' % (input_video_path))
+    print('  duration: %s' % (duration))
 
     fv = FacialVideo(input_video_path)
 
@@ -30,10 +33,10 @@ def process_one_video(input_video_path, duration = 30.0):
 
     if len(segments) == 0:
         print('  none')
-        return
+        return 0, fv.fps
 
     for segment in segments:
-        print('  segment: start: %d, end: %d' % (segment[0], segment[1]))
+        print('  segment: start: %d (%.3f), end: %d (%.3f)' % (segment[0], segment[0] / fv.fps, segment[1], segment[1] / fv.fps))
 
     print('Best fit:')
     for n in range(90, 30, -1):
@@ -45,54 +48,80 @@ def process_one_video(input_video_path, duration = 30.0):
                 continue
 
             for frame in frames:
-                print('  threshold: %d, start: %d, end: %d' % (n, frame[0], frame[1]))
+                print('  threshold: %d, start: %d (%.3f), end: %d (%.3f)' % (n, frame[0], frame[0] / fv.fps, frame[1], frame[1] / fv.fps))
                 found = 1
+                if start_frame == 0:
+                    start_frame = frame[0]
 
-        if found != 0:
-            break
+            if found != 0:
+                segments.remove(segment)
+                found = 0
 
-    if found == 0:
+    if start_frame == 0:
         print('  none')
 
-    return
+    return start_frame, fv.fps
 
-
-def process_training_csv(csv_path):
+def process_training_csv(csv_path, update):
+    csv_fields = ['file_name', 'start_time', 'duration', 'pd_stage']
 
     _, filename = os.path.split(csv_path)
     print('process_training_csv: %s' % (filename))
 
-    with open(csv_path, 'r', newline = '') as csv_file:
-        csv_reader = csv.DictReader(csv_file)
+    # update the record in csv file if found
+    tempfile = NamedTemporaryFile(mode = 'w', delete = False)
+
+    with open(csv_path, 'r') as csv_file, tempfile:
+        csv_reader = csv.DictReader(csv_file, fieldnames = csv_fields)
+        #csv_reader = csv.DictReader(csv_file)
+        csv_writer = csv.DictWriter(tempfile, fieldnames = csv_fields)
         for row in csv_reader:
             video_path = row['file_name']
+            if video_path == 'file_name':
+                # copy the field names
+                csv_writer.writerow(row)
+                continue
+
             duration = float(row['duration'])
 
-            ret = process_one_video(video_path, duration)
-            if ret == False:
-                return False
+            start_frame, fps = process_one_video(video_path, duration)
+            if start_frame != 0 and update != False:
+                row['start_time'] = '%.3f' % ((start_frame + 1) / fps)
+
+            # copy the rows
+            csv_writer.writerow(row)
+
+    shutil.move(tempfile.name, csv_path)
 
     print('  success')
     return True
 
 def main():
+    update = False
 
     # parse argument
     parser = argparse.ArgumentParser()
     parser.add_argument('path', help = 'path to a video file or a training recipe file')
 
     parser.add_argument('-d', '--duration', help = 'duration (sec)')
+    parser.add_argument("-u", "--update", action = "count", default = 0, help = 'update the recipe')
 
     args = parser.parse_args()
 
     input_video_path = args.path
 
+    if args.update != 0:
+        update = True
+
     print('User input:')
     print('  input path: %s' % (input_video_path))
+    print('  update csv: %s' % (str(update)))
 
     if args.duration != None:
         duration = float(args.duration)
         print('  duration:   %.3f' % (duration))
+    else:
+        duration = 30.0
 
     _, ext = os.path.splitext(input_video_path)
 
@@ -101,7 +130,7 @@ def main():
             print('  ignore duration')
 
         # could be a training recipe
-        ret = process_training_csv(input_video_path)
+        ret = process_training_csv(input_video_path, update)
 
     elif os.path.isfile(input_video_path) != False:
         mime = magic.Magic(mime=True)
@@ -111,7 +140,7 @@ def main():
             print('  not a video file')
             return False
 
-        ret = process_one_video(input_video_path, duration)
+        start_frame, fps = process_one_video(input_video_path, duration)
 
     else:
         print('Unrecognized path')
