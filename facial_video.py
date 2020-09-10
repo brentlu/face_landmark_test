@@ -4,12 +4,19 @@ from facial_engine import FacialEngine
 from scipy.spatial import distance as dist
 import csv
 import cv2
-import numpy
+import numpy as np
 import os
 
 
 # a wrapper class for opencv's VideoCapture class
 class FacialVideo:
+    LEFT_EYE = 0
+    RIGHT_EYE = 1
+
+    MIN = 0
+    AVG = 1
+    MAX = 2
+
     def __init__(self, video_path):
         # open the video file
         self.__cap = cv2.VideoCapture(video_path)
@@ -48,15 +55,17 @@ class FacialVideo:
             except StopIteration:
                 self.__csv_index = self.frame_count + 1
 
-        # eye aspect ratio
-        self.min_ear = [1.0, 1.0]
-        self.max_ear = [0.0, 0.0]
-        self.avg_ear = [0.0, 0.0]
+        # initial eye aspect ratio
+        self.eye_aspect_ratio = np.zeros((2, 3), dtype = float)
+        self.eye_aspect_ratio[self.LEFT_EYE][self.MIN] = 1.0
+        self.eye_aspect_ratio[self.RIGHT_EYE][self.MIN] = 1.0
 
-        # eye width
-        self.min_ew = [1000.0, 1000.0]
-        self.max_ew = [0.0, 0.0]
-        self.avg_ew = [0.0, 0.0]
+        # initial eye width
+        self.eye_width = np.zeros((2, 3), dtype = float)
+        self.eye_width[self.LEFT_EYE][self.MIN] = 1000.0
+        self.eye_width[self.RIGHT_EYE][self.MIN] = 1000.0
+
+        return
 
     def __del__(self):
         self.__csv_file.close()
@@ -126,51 +135,57 @@ class FacialVideo:
     def get_time_stamp(self):
         return self.__time_stamp
 
-    def get_eye_aspect_ratio(self, eye, landmarks = None):
+    def get_eye_aspect_ratio(self, landmarks = None):
         if landmarks == None:
             landmarks = self.__landmarks
 
         if len(landmarks) != 68:
-            print('incomplete landmark')
+            print('incomplete landmarks')
+            return 0.0, 0.0
 
-        if eye == 'left':
-            # euclidean distances between the two sets of vertical eye landmarks
-            A = dist.euclidean(landmarks[43], landmarks[47])
-            B = dist.euclidean(landmarks[44], landmarks[46])
-            # euclidean distance between the horizontal eye landmark
-            C = dist.euclidean(landmarks[42], landmarks[45])
-        elif eye == 'right':
-            # euclidean distances between the two sets of vertical eye landmarks
-            A = dist.euclidean(landmarks[38], landmarks[40])
-            B = dist.euclidean(landmarks[37], landmarks[41])
-            # euclidean distance between the horizontal eye landmark
-            C = dist.euclidean(landmarks[39], landmarks[36])
-        else:
-            print('calculate_ear_value: unknown eye %s' % (eye))
-            return 0.0
+        # euclidean distances between the two sets of vertical eye landmarks
+        A = dist.euclidean(landmarks[43], landmarks[47])
+        B = dist.euclidean(landmarks[44], landmarks[46])
+        # euclidean distance between the horizontal eye landmark
+        C = dist.euclidean(landmarks[42], landmarks[45])
 
-        ear = (A + B) / (2.0 * C)
+        left = (A + B) / (2.0 * C)
 
-        return ear
+        # euclidean distances between the two sets of vertical eye landmarks
+        A = dist.euclidean(landmarks[38], landmarks[40])
+        B = dist.euclidean(landmarks[37], landmarks[41])
+        # euclidean distance between the horizontal eye landmark
+        C = dist.euclidean(landmarks[39], landmarks[36])
 
-    def get_eye_width(self, eye, landmarks = None):
+        right = (A + B) / (2.0 * C)
+
+        return left, right
+
+    def get_eye_width(self, landmarks = None):
         if landmarks == None:
             landmarks = self.__landmarks
 
         if len(landmarks) != 68:
-            print('incomplete landmark')
+            print('incomplete landmarks')
+            return 0.0, 0.0
 
-        if eye == 'left':
-            return dist.euclidean(landmarks[42], landmarks[45])
-        elif eye == 'right':
-            return dist.euclidean(landmarks[39], landmarks[36])
-        else:
-            print('get_eye_width: unknown eye %s' % (eye))
+        left = dist.euclidean(landmarks[42], landmarks[45])
+        right = dist.euclidean(landmarks[39], landmarks[36])
 
-        return 0.0
+        return left, right
 
     def update_static_data(self, start = 0, end = 0):
         total_frame = 0
+
+        # initial eye aspect ratio
+        self.eye_aspect_ratio = np.zeros((2, 3), dtype = float)
+        self.eye_aspect_ratio[self.LEFT_EYE][self.MIN] = 1.0
+        self.eye_aspect_ratio[self.RIGHT_EYE][self.MIN] = 1.0
+
+        # initial eye width
+        self.eye_width = np.zeros((2, 3), dtype = float)
+        self.eye_width[self.LEFT_EYE][self.MIN] = 10000.0
+        self.eye_width[self.RIGHT_EYE][self.MIN] = 10000.0
 
         # open the csv file
         csvfile = open(self.__csv_path, 'r', newline = '')
@@ -193,51 +208,47 @@ class FacialVideo:
 
                 landmarks.append((x, y))
 
-            # ear of left eye
-            ear = self.get_eye_aspect_ratio('left', landmarks)
-            if ear < self.min_ear[0]:
-                self.min_ear[0] = ear
-            if ear > self.max_ear[0]:
-                self.max_ear[0] = ear
+            ear = self.get_eye_aspect_ratio(landmarks)
 
-            self.avg_ear[0] += ear
+            # ear of left eye
+            if ear[self.LEFT_EYE] < self.eye_aspect_ratio[self.LEFT_EYE][self.MIN]:
+                self.eye_aspect_ratio[self.LEFT_EYE][self.MIN] = ear[self.LEFT_EYE]
+            if ear[self.LEFT_EYE] > self.eye_aspect_ratio[self.LEFT_EYE][self.MAX]:
+                self.eye_aspect_ratio[self.LEFT_EYE][self.MAX] = ear[self.LEFT_EYE]
+            self.eye_aspect_ratio[self.LEFT_EYE][self.AVG] += ear[self.LEFT_EYE]
 
             # ear of right eye
-            ear = self.get_eye_aspect_ratio('right', landmarks)
-            if ear < self.min_ear[1]:
-                self.min_ear[1] = ear
-            if ear > self.max_ear[1]:
-                self.max_ear[1] = ear
+            if ear[self.RIGHT_EYE] < self.eye_aspect_ratio[self.RIGHT_EYE][self.MIN]:
+                self.eye_aspect_ratio[self.RIGHT_EYE][self.MIN] = ear[self.RIGHT_EYE]
+            if ear[self.RIGHT_EYE] > self.eye_aspect_ratio[self.RIGHT_EYE][self.MAX]:
+                self.eye_aspect_ratio[self.RIGHT_EYE][self.MAX] = ear[self.RIGHT_EYE]
+            self.eye_aspect_ratio[self.RIGHT_EYE][self.AVG] += ear[self.RIGHT_EYE]
 
-            self.avg_ear[1] += ear
+            ew = self.get_eye_width(landmarks)
 
             # width of left eye
-            ew = self.get_eye_width('left', landmarks)
-            if ew < self.min_ew[0]:
-                self.min_ew[0] = ew
-            if ew > self.max_ew[0]:
-                self.max_ew[0] = ew
-
-            self.avg_ew[0] += ew
+            if ew[self.LEFT_EYE] < self.eye_width[self.LEFT_EYE][self.MIN]:
+                self.eye_width[self.LEFT_EYE][self.MIN] = ew[self.LEFT_EYE]
+            if ew[self.LEFT_EYE] > self.eye_width[self.LEFT_EYE][self.MAX]:
+                self.eye_width[self.LEFT_EYE][self.MAX] = ew[self.LEFT_EYE]
+            self.eye_width[self.LEFT_EYE][self.AVG] += ew[self.LEFT_EYE]
 
             # width of right eye
-            ew = self.get_eye_width('right', landmarks)
-            if ew < self.min_ew[1]:
-                self.min_ew[1] = ew
-            if ew > self.max_ew[1]:
-                self.max_ew[1] = ew
-
-            self.avg_ew[1] += ew
+            if ew[self.RIGHT_EYE] < self.eye_width[self.RIGHT_EYE][self.MIN]:
+                self.eye_width[self.RIGHT_EYE][self.MIN] = ew[self.RIGHT_EYE]
+            if ew[self.RIGHT_EYE] > self.eye_width[self.RIGHT_EYE][self.MAX]:
+                self.eye_width[self.RIGHT_EYE][self.MAX] = ew[self.RIGHT_EYE]
+            self.eye_width[self.RIGHT_EYE][self.AVG] += ew[self.RIGHT_EYE]
 
             total_frame += 1
 
         csvfile.close()
 
         if total_frame != 0:
-            self.avg_ear[0] /= total_frame
-            self.avg_ear[1] /= total_frame
-            self.avg_ew[0] /= total_frame
-            self.avg_ew[1] /= total_frame
+            self.eye_aspect_ratio[self.LEFT_EYE][self.AVG] /= total_frame
+            self.eye_aspect_ratio[self.RIGHT_EYE][self.AVG] /= total_frame
+            self.eye_width[self.LEFT_EYE][self.AVG] /= total_frame
+            self.eye_width[self.RIGHT_EYE][self.AVG] /= total_frame
             return True
 
         return False
@@ -339,10 +350,9 @@ class FacialVideo:
 
                 landmarks.append((x, y))
 
-            ew_left = self.get_eye_width('left', landmarks)
-            ew_right = self.get_eye_width('right', landmarks)
+            ew = self.get_eye_width(landmarks)
 
-            if (ew_left * 100.0) > (self.max_ew[0] * threshold) and (ew_right * 100.0) > (self.max_ew[1] * threshold):
+            if (ew[self.LEFT_EYE] * 100.0) > (self.eye_width[self.LEFT_EYE][self.MAX] * threshold) and (ew[self.RIGHT_EYE] * 100.0) > (self.eye_width[self.RIGHT_EYE][self.MAX] * threshold):
                 if frame_start + frame_count == index:
                     frame_count += 1
                 #else:

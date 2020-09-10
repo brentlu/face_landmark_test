@@ -166,10 +166,10 @@ def process_one_video(input_video_path, data_path, start_time = 0.0, duration = 
     ret = fv.update_static_data(start_frame, end_frame)
 
     if ret != False:
-        log_print(log_file, '  eye aspect ratio(left):  min %.3f, avg %.3f, max %.3f' % (fv.min_ear[0], fv.avg_ear[0], fv.max_ear[0]))
-        log_print(log_file, '  eye aspect ratio(right): min %.3f, avg %.3f, max %.3f' % (fv.min_ear[1], fv.avg_ear[1], fv.max_ear[1]))
-        log_print(log_file, '  eye width(left):         min %.3f, avg %.3f, max %.3f' % (fv.min_ew[0], fv.avg_ew[0], fv.max_ew[0]))
-        log_print(log_file, '  eye width(right):        min %.3f, avg %.3f, max %.3f' % (fv.min_ew[1], fv.avg_ew[1], fv.max_ew[1]))
+        log_print(log_file, '  eye aspect ratio(left):  min %.3f, avg %.3f, max %.3f' % (fv.eye_aspect_ratio[fv.LEFT_EYE][fv.MIN], fv.eye_aspect_ratio[fv.LEFT_EYE][fv.AVG], fv.eye_aspect_ratio[fv.LEFT_EYE][fv.MAX]))
+        log_print(log_file, '  eye aspect ratio(right): min %.3f, avg %.3f, max %.3f' % (fv.eye_aspect_ratio[fv.RIGHT_EYE][fv.MIN], fv.eye_aspect_ratio[fv.RIGHT_EYE][fv.AVG], fv.eye_aspect_ratio[fv.RIGHT_EYE][fv.MAX]))
+        log_print(log_file, '  eye width(left):         min %.3f, avg %.3f, max %.3f' % (fv.eye_width[fv.LEFT_EYE][fv.MIN], fv.eye_width[fv.LEFT_EYE][fv.AVG], fv.eye_width[fv.LEFT_EYE][fv.MAX]))
+        log_print(log_file, '  eye width(right):        min %.3f, avg %.3f, max %.3f' % (fv.eye_width[fv.RIGHT_EYE][fv.MIN], fv.eye_width[fv.RIGHT_EYE][fv.AVG], fv.eye_width[fv.RIGHT_EYE][fv.MAX]))
 
     #threshold = min_ear * 0.7 + max_ear * 0.3
     #print('  fixed threshold: %f' % (threshold))
@@ -221,16 +221,14 @@ def process_one_video(input_video_path, data_path, start_time = 0.0, duration = 
             delta = [0.0, 0.0]
             blink_overlap = False
 
-            ear[0] = fv.get_eye_aspect_ratio('left')
-            ear[1] = fv.get_eye_aspect_ratio('right')
-            ew[0] = fv.get_eye_width('left')
-            ew[1] = fv.get_eye_width('right')
+            ear = fv.get_eye_aspect_ratio()
+            ew = fv.get_eye_width()
 
             #blink = test_blink_fixed_threshold(threshold, frame_index, ear_left, log_file)
             blink[0], delta[0] = test_blink_fixed_delta(buffer_left, ear[0])
             blink[1], delta[1] = test_blink_fixed_delta(buffer_right, ear[1])
 
-            log_print(log_file, '  frame: %3d, time: %.3f, ear: %.3f %.3f, width: %3.2f%% %3.2f%%, delta %+.3f %+.3f' % (frame_index, time_stamp, ear[0], ear[1], ew[0] * 100.0 / fv.max_ew[0], ew[1] * 100.0 / fv.max_ew[1], delta[0], delta[1]), end = '')
+            log_print(log_file, '  frame: %3d, time: %.3f, ear: %.3f %.3f, width: %3.2f%% %3.2f%%, delta %+.3f %+.3f' % (frame_index, time_stamp, ear[fv.LEFT_EYE], ear[fv.RIGHT_EYE], ew[fv.LEFT_EYE] * 100.0 / fv.eye_width[fv.LEFT_EYE][fv.MAX], ew[fv.RIGHT_EYE] * 100.0 / fv.eye_width[fv.RIGHT_EYE][fv.MAX], delta[0], delta[1]), end = '')
 
             if blink[0] != False:
                 blink_window[0] = 2
