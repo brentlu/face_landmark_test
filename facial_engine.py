@@ -40,10 +40,17 @@ class Logger:
 
         print('  log path = %s' % (log_path))
 
+        self.__log_path = log_path
+        self.__written = 0
+
         return
 
     def __del__(self):
         self.__file.close()
+
+        # remove empty log file
+        if self.__written == 0:
+            os.remove(self.__log_path)
 
     def print(self, string, end = '\n'):
         # print to screen directly
@@ -57,6 +64,8 @@ class Logger:
         timestamp = time.strftime('%Y-%m-%dT%H:%M:%S%z', now)
 
         self.__file.write('%s %s%s' % (timestamp, string, end))
+
+        self.__written += 1
 
         return
 
