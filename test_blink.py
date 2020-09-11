@@ -124,7 +124,7 @@ def test_blink_fixed_delta(buffer, ear):
 
     return ret, delta_max
 
-def process_one_video(input_video_path, data_path, start_time = 0.0, duration = 0.0):
+def process_one_video(input_video_path, data_path, start_frame, end_frame):
     draw_plot = False
 
     frame_no_landmarks = 0
@@ -156,12 +156,6 @@ def process_one_video(input_video_path, data_path, start_time = 0.0, duration = 
     log_print(log_file, '  output video path: %s' % (output_video_path))
 
     fv = FacialVideo(input_video_path)
-
-    start_frame = int(start_time * fv.fps)
-    if duration == 0.0:
-        end_frame = fv.frame_count
-    else:
-        end_frame = start_frame + int(duration * fv.fps)
 
     ret = fv.update_static_data(start_frame, end_frame)
 
@@ -206,7 +200,7 @@ def process_one_video(input_video_path, data_path, start_time = 0.0, duration = 
         frame_index = fv.get_frame_index()
         if frame_index < start_frame:
             continue
-        elif frame_index >= end_frame:
+        elif frame_index > end_frame:
             break
 
         if fv.available() != False:
@@ -313,8 +307,8 @@ def process_one_video(input_video_path, data_path, start_time = 0.0, duration = 
     video_writer.release()
 
     log_print(log_file, 'Statistic:')
-    log_print(log_file, '  total %d frames processed' % (end_frame - start_frame))
-    log_print(log_file, '  %d frames (%3.2f%%) has no landmarks' % (frame_no_landmarks, (frame_no_landmarks * 100.0) / (end_frame - start_frame)))
+    log_print(log_file, '  total %d frames processed' % (end_frame - start_frame + 1))
+    log_print(log_file, '  %d frames (%3.2f%%) has no landmarks' % (frame_no_landmarks, (frame_no_landmarks * 100.0) / (end_frame - start_frame + 1)))
     log_print(log_file, '  %d blinks found' % (blink_count))
     log_print(log_file, 'Process complete')
 
@@ -340,10 +334,13 @@ def process_training_csv(csv_path, data_path):
         csv_reader = csv.DictReader(csv_file)
         for row in csv_reader:
             video_path = row['file_name']
-            start_time = float(row['start_time'])
-            duration = float(row['duration'])
+            if video_path == 'file_name':
+                continue
 
-            ret = process_one_video(video_path, data_path, start_time, duration)
+            start_frame = int(row['start_frame'])
+            end_frame = int(row['end_frame'])
+
+            ret = process_one_video(video_path, data_path, start_frame, end_frame)
             if ret == False:
                 return False
 
@@ -407,7 +404,15 @@ def main():
             print('  not a video file')
             return False
 
-        ret = process_one_video(input_video_path, data_path, start_time, duration)
+        fv = FacialVideo(input_video_path)
+
+        start_frame = int(start_time * fv.fps)
+        if duration == 0.0:
+            end_frame = fv.frame_count
+        else:
+            end_frame = start_frame + int(duration * fv.fps) - 1
+
+        ret = process_one_video(input_video_path, data_path, start_frame, duration)
 
     elif os.path.isdir(input_video_path):
         if args.start_time != None:
@@ -430,7 +435,15 @@ def main():
                 if prog.match(file) == None:
                     continue
 
-                ret = process_one_video(input_video_path, data_path)
+                fv = FacialVideo(file_path)
+
+                start_frame = int(start_time * fv.fps)
+                if duration == 0.0:
+                    end_frame = fv.frame_count
+                else:
+                    end_frame = start_frame + int(duration * fv.fps) - 1
+
+                ret = process_one_video(file_path, data_path, start_frame, end_frame)
 
     else:
         print('Unrecognized path')

@@ -199,7 +199,7 @@ class FacialVideo:
             if index < start:
                 continue
             if end != 0:
-                if index >= end:
+                if index > end:
                     break
 
             for n in range(0, 68):
@@ -269,7 +269,7 @@ class FacialVideo:
             if index < start:
                 continue
             if end != 0:
-                if index >= end:
+                if index > end:
                     break
 
             left = int(csv_row['target_left'])
@@ -294,7 +294,7 @@ class FacialVideo:
 
         return rect
 
-    def find_frames_continuous(self, min = 30):
+    def find_frames_continuous(self, min_duration = 30):
 
         frame_start = 1
         frame_count = 0
@@ -311,19 +311,19 @@ class FacialVideo:
             if frame_start + frame_count == index:
                 frame_count += 1
             else:
-                if frame_count >= min:
-                    frames.append((frame_start, frame_start + frame_count))
+                if frame_count >= min_duration:
+                    frames.append((frame_start, frame_start + frame_count - 1))
                 frame_start = index
                 frame_count = 1
 
-        if frame_start != 0 and frame_count >= min:
-            frames.append((frame_start, frame_start + frame_count))
+        if frame_count >= min_duration:
+            frames.append((frame_start, frame_start + frame_count - 1))
 
         csvfile.close()
 
         return frames
 
-    def find_frames_eye_width_threshold(self, start, end, threshold, min):
+    def find_frames_eye_width_threshold(self, start, end, threshold, min_duration):
 
         frame_start = start
         frame_count = 0
@@ -341,7 +341,7 @@ class FacialVideo:
 
             if index < start:
                 continue
-            elif index >= end:
+            elif index > end:
                 break
 
             for n in range(0, 68):
@@ -358,13 +358,13 @@ class FacialVideo:
                 #else:
                     # should not happen
             else:
-                if frame_count >= min:
-                    frames.append((frame_start, frame_start + frame_count))
+                if frame_count >= min_duration:
+                    frames.append((frame_start, frame_start + frame_count - 1))
                 frame_start = index + 1
                 frame_count = 0
 
-        if frame_start != 0 and frame_count >= min:
-            frames.append((frame_start, frame_start + frame_count))
+        if frame_count >= min_duration:
+            frames.append((frame_start, frame_start + frame_count - 1))
 
         csvfile.close()
 
