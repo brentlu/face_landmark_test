@@ -85,6 +85,17 @@ class Logger:
 #   csv_path = engine.get_csv_data_file()
 #
 class FacialEngine:
+    data_csv_fields = ['index', 'detector', 'total_face_num', 'center_face_num', 'target_left', 'target_top', 'target_right', 'target_bottom', 'time_stamp', \
+                       'mark_0_x', 'mark_0_y', 'mark_1_x', 'mark_1_y', 'mark_2_x', 'mark_2_y', 'mark_3_x', 'mark_3_y', 'mark_4_x', 'mark_4_y', 'mark_5_x', 'mark_5_y', 'mark_6_x', 'mark_6_y', 'mark_7_x', 'mark_7_y', 'mark_8_x', 'mark_8_y', 'mark_9_x', 'mark_9_y', \
+                       'mark_10_x', 'mark_10_y', 'mark_11_x', 'mark_11_y', 'mark_12_x', 'mark_12_y', 'mark_13_x', 'mark_13_y', 'mark_14_x', 'mark_14_y', 'mark_15_x', 'mark_15_y', 'mark_16_x', 'mark_16_y', 'mark_17_x', 'mark_17_y', 'mark_18_x', 'mark_18_y', 'mark_19_x', 'mark_19_y', \
+                       'mark_20_x', 'mark_20_y', 'mark_21_x', 'mark_21_y', 'mark_22_x', 'mark_22_y', 'mark_23_x', 'mark_23_y', 'mark_24_x', 'mark_24_y', 'mark_25_x', 'mark_25_y', 'mark_26_x', 'mark_26_y', 'mark_27_x', 'mark_27_y', 'mark_28_x', 'mark_28_y', 'mark_29_x', 'mark_29_y', \
+                       'mark_30_x', 'mark_30_y', 'mark_31_x', 'mark_31_y', 'mark_32_x', 'mark_32_y', 'mark_33_x', 'mark_33_y', 'mark_34_x', 'mark_34_y', 'mark_35_x', 'mark_35_y', 'mark_36_x', 'mark_36_y', 'mark_37_x', 'mark_37_y', 'mark_38_x', 'mark_38_y', 'mark_39_x', 'mark_39_y', \
+                       'mark_40_x', 'mark_40_y', 'mark_41_x', 'mark_41_y', 'mark_42_x', 'mark_42_y', 'mark_43_x', 'mark_43_y', 'mark_44_x', 'mark_44_y', 'mark_45_x', 'mark_45_y', 'mark_46_x', 'mark_46_y', 'mark_47_x', 'mark_47_y', 'mark_48_x', 'mark_48_y', 'mark_49_x', 'mark_49_y', \
+                       'mark_50_x', 'mark_50_y', 'mark_51_x', 'mark_51_y', 'mark_52_x', 'mark_52_y', 'mark_53_x', 'mark_53_y', 'mark_54_x', 'mark_54_y', 'mark_55_x', 'mark_55_y', 'mark_56_x', 'mark_56_y', 'mark_57_x', 'mark_57_y', 'mark_58_x', 'mark_58_y', 'mark_59_x', 'mark_59_y', \
+                       'mark_60_x', 'mark_60_y', 'mark_61_x', 'mark_61_y', 'mark_62_x', 'mark_62_y', 'mark_63_x', 'mark_63_y', 'mark_64_x', 'mark_64_y', 'mark_65_x', 'mark_65_y', 'mark_66_x', 'mark_66_y', 'mark_67_x', 'mark_67_y']
+    meta_csv_fields = ['file_name', 'md5_digest', 'rotation']
+
+
     def __init__(self, video_path):
         # translate to abs path
         self.input_video_path = os.path.abspath(video_path)
@@ -271,14 +282,6 @@ class FacialEngine:
         csv_index = 0
         frame_index = 0
         frame_fail_count = 0
-        csv_fields = ['index', 'detector', 'total_face_num', 'center_face_num', 'target_left', 'target_top', 'target_right', 'target_bottom', 'time_stamp', \
-                      'mark_0_x', 'mark_0_y', 'mark_1_x', 'mark_1_y', 'mark_2_x', 'mark_2_y', 'mark_3_x', 'mark_3_y', 'mark_4_x', 'mark_4_y', 'mark_5_x', 'mark_5_y', 'mark_6_x', 'mark_6_y', 'mark_7_x', 'mark_7_y', 'mark_8_x', 'mark_8_y', 'mark_9_x', 'mark_9_y', \
-                      'mark_10_x', 'mark_10_y', 'mark_11_x', 'mark_11_y', 'mark_12_x', 'mark_12_y', 'mark_13_x', 'mark_13_y', 'mark_14_x', 'mark_14_y', 'mark_15_x', 'mark_15_y', 'mark_16_x', 'mark_16_y', 'mark_17_x', 'mark_17_y', 'mark_18_x', 'mark_18_y', 'mark_19_x', 'mark_19_y', \
-                      'mark_20_x', 'mark_20_y', 'mark_21_x', 'mark_21_y', 'mark_22_x', 'mark_22_y', 'mark_23_x', 'mark_23_y', 'mark_24_x', 'mark_24_y', 'mark_25_x', 'mark_25_y', 'mark_26_x', 'mark_26_y', 'mark_27_x', 'mark_27_y', 'mark_28_x', 'mark_28_y', 'mark_29_x', 'mark_29_y', \
-                      'mark_30_x', 'mark_30_y', 'mark_31_x', 'mark_31_y', 'mark_32_x', 'mark_32_y', 'mark_33_x', 'mark_33_y', 'mark_34_x', 'mark_34_y', 'mark_35_x', 'mark_35_y', 'mark_36_x', 'mark_36_y', 'mark_37_x', 'mark_37_y', 'mark_38_x', 'mark_38_y', 'mark_39_x', 'mark_39_y', \
-                      'mark_40_x', 'mark_40_y', 'mark_41_x', 'mark_41_y', 'mark_42_x', 'mark_42_y', 'mark_43_x', 'mark_43_y', 'mark_44_x', 'mark_44_y', 'mark_45_x', 'mark_45_y', 'mark_46_x', 'mark_46_y', 'mark_47_x', 'mark_47_y', 'mark_48_x', 'mark_48_y', 'mark_49_x', 'mark_49_y', \
-                      'mark_50_x', 'mark_50_y', 'mark_51_x', 'mark_51_y', 'mark_52_x', 'mark_52_y', 'mark_53_x', 'mark_53_y', 'mark_54_x', 'mark_54_y', 'mark_55_x', 'mark_55_y', 'mark_56_x', 'mark_56_y', 'mark_57_x', 'mark_57_y', 'mark_58_x', 'mark_58_y', 'mark_59_x', 'mark_59_y', \
-                      'mark_60_x', 'mark_60_y', 'mark_61_x', 'mark_61_y', 'mark_62_x', 'mark_62_y', 'mark_63_x', 'mark_63_y', 'mark_64_x', 'mark_64_y', 'mark_65_x', 'mark_65_y', 'mark_66_x', 'mark_66_y', 'mark_67_x', 'mark_67_y']
 
         self.logger.print('Process video:')
 
@@ -326,7 +329,7 @@ class FacialEngine:
                 csv_index = frame_count + 1
 
         csv_file_write = open(self.output_csv_path, 'w', newline='')
-        csv_writer = csv.DictWriter(csv_file_write, fieldnames = csv_fields)
+        csv_writer = csv.DictWriter(csv_file_write, fieldnames = self.data_csv_fields)
         csv_writer.writeheader()
 
         while True:
@@ -712,8 +715,6 @@ class FacialEngine:
         return csv_path
 
     def get_video_rotation(self):
-        csv_fields = ['file_name', 'md5_digest', 'rotation']
-
         # remove directory and ext part
         _, video_name = os.path.split(self.input_video_path)
         video_name, _ = os.path.splitext(video_name)
@@ -745,7 +746,7 @@ class FacialEngine:
         # prepare the dict
         csv_row = {
             'file_name': video_name,
-            'md5_digest' : str(self.input_video_hash)
+            'md5_digest': str(self.input_video_hash)
         }
 
         if rotation == -1:
@@ -760,18 +761,20 @@ class FacialEngine:
         # initial the cvs file
         if os.path.isfile(meta_csv_path) == False:
             with open(meta_csv_path, 'w', newline='') as csv_file_write:
-                csv_writer = csv.DictWriter(csv_file_write, fieldnames = csv_fields)
+                csv_writer = csv.DictWriter(csv_file_write, fieldnames = self.meta_csv_fields)
                 csv_writer.writeheader()
                 csv_writer.writerow(csv_row)
 
             return rotation
 
         # update the record in csv file if found
-        tempfile = NamedTemporaryFile(mode = 'w', delete = False)
+        temp_file = NamedTemporaryFile(mode = 'w', delete = False)
 
-        with open(meta_csv_path, 'r') as csvfile, tempfile:
-            csv_reader = csv.DictReader(csvfile, fieldnames = csv_fields)
-            csv_writer = csv.DictWriter(tempfile, fieldnames = csv_fields)
+        with open(meta_csv_path, 'r') as csv_file, temp_file:
+            csv_reader = csv.DictReader(csv_file)
+            csv_writer = csv.DictWriter(tempfile, fieldnames = self.meta_csv_fields)
+            csv_writer.writeheader()
+
             for row in csv_reader:
 
                 if video_name != file_name or str(self.input_video_hash) != md5_digest:
