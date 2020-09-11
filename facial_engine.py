@@ -13,8 +13,6 @@ import time
 
 class Logger:
     def __init__(self, video_path):
-        print('Start logger:')
-
         # remove directory part
         _, log_name = os.path.split(video_path)
 
@@ -37,9 +35,6 @@ class Logger:
             time.sleep(3)
 
         self.__file = open(log_path, 'w')
-
-        print('  log path = %s' % (log_path))
-
         self.__log_path = log_path
         self.__written = 0
 
@@ -53,6 +48,10 @@ class Logger:
             os.remove(self.__log_path)
 
     def print(self, string, end = '\n'):
+        if self.__written == 0:
+            print('Start logger:')
+            print('  log path = %s' % (self.__log_path))
+
         # print to screen directly
         print(string, end = end)
 
@@ -163,8 +162,6 @@ class FacialEngine:
     def check_data_directory(self):
         # create basic layout of data directory
         # run before logger starts
-        print('Check data directory:')
-
         data_path = get_data_path('data')
         data_path = os.path.abspath(data_path)
 
@@ -181,6 +178,8 @@ class FacialEngine:
 
         for path in pathes:
             if os.path.isdir(path) == False:
+                print('Check data directory:')
+
                 try:
                     print('  create %s directory' % (path))
                     os.mkdir(path)
@@ -188,7 +187,7 @@ class FacialEngine:
                     print('  fail to create %s directory' % (path))
                     return False
 
-        print('  all good')
+                print('  all good')
 
         return True
 
