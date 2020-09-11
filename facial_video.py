@@ -73,15 +73,23 @@ class FacialVideo:
         self.__csv_file.close()
         self.__cap.release()
 
-    def read(self):
-        ret, frame = self.__cap.read()
+    def read(self, no_image = False):
+        frame = []
+
+        ret = self.__cap.grab()
         if ret == False:
             # no frame left in the video
             return ret, frame
 
+        if no_image == False:
+            ret, frame = self.__cap.retrieve()
+            if ret == False:
+                # decode fail
+                return ret, frame
+
         self.__frame_index += 1
 
-        if self.__rotation != -1:
+        if self.__rotation != -1 and no_image == False:
             frame = cv2.rotate(frame, self.__rotation)
 
         self.__time_stamp = 0.0

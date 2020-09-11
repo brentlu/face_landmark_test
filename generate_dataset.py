@@ -7,8 +7,9 @@ import os
 
 
 def process_one_video(file_name, start_frame, end_frame, pd_stage, csv_writer):
+    frame_index = 0
     csv_row = []
-    ret = True
+    ret = False
 
     print('Process video:')
     print('  file name: %s' % (file_name))
@@ -18,16 +19,27 @@ def process_one_video(file_name, start_frame, end_frame, pd_stage, csv_writer):
 
     fv = FacialVideo(file_name)
 
+    print('Process frame:')
     while True:
-        ret, _ = fv.read()
+        frame_index += 1
+
+        if frame_index < start_frame:
+            # don't decode this frame to speed up
+            ret, _ = fv.read(True)
+            continue
+        elif frame_index > end_frame:
+            ret = True
+            break
+        else:
+            # don't decode this frame to speed up
+            ret, _ = fv.read(True)
+
         if ret == False:
             # no frame to process
             break;
 
-        frame_index = fv.get_frame_index()
-        if frame_index < start_frame:
-            continue
-        elif frame_index > end_frame:
+        if frame_index != fv.get_frame_index():
+            print('  expect frame %d but got %d' %(frame_index, fv.get_frame_index()))
             break
 
         if fv.available() != False:
@@ -36,12 +48,11 @@ def process_one_video(file_name, start_frame, end_frame, pd_stage, csv_writer):
 
             print('  frame: %3d, ear: %.3f %.3f' % (frame_index, ear[fv.LEFT_EYE], ear[fv.RIGHT_EYE]), end = '\r')
 
-
             csv_row.append(ear_string)
         else:
             # should not happen
-            print('  invalid frame index %d' %(frame_index))
-            ret = False
+            print('  invalid frame %d' %(frame_index))
+            break
 
     if ret != False:
         csv_row.append(str(pd_stage))

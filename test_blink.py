@@ -85,6 +85,7 @@ def test_blink_fixed_delta(buffer, ear):
 def process_one_video(input_video_path, data_path, start_frame, end_frame):
     draw_plot = False
 
+    frame_index = 0
     frame_no_landmarks = 0
 
     draw_rect = 0
@@ -159,18 +160,27 @@ def process_one_video(input_video_path, data_path, start_frame, end_frame):
     video_writer = cv2.VideoWriter(output_video_path, cv2.VideoWriter_fourcc(*'mp4v'),
                                    fv.fps, (width, height))
 
-    log_print(log_file, 'Process video:')
+    log_print(log_file, 'Process frame:')
 
     while True:
-        ret, frame = fv.read()
+        frame_index += 1
+
+        if frame_index < start_frame:
+            # don't decode this frame to speed up
+            ret, _ = fv.read(True)
+            continue
+        elif frame_index > end_frame:
+            break
+        else:
+            # decode this frame
+            ret, frame = fv.read()
+
         if ret == False:
             # no frame to process
             break;
 
-        frame_index = fv.get_frame_index()
-        if frame_index < start_frame:
-            continue
-        elif frame_index > end_frame:
+        if frame_index != fv.get_frame_index():
+            print('  expect frame %d but got %d' %(frame_index, fv.get_frame_index()))
             break
 
         if fv.available() != False:
