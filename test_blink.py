@@ -56,48 +56,6 @@ def log_print(log_file, string, end = '\n'):
 
     return
 
-state = 'open'
-close_index = 0
-
-# not used
-def test_blink_fixed_threshold(threshold, frame_index, ear, log_file):
-    length = 2
-
-    global state
-    global close_index
-
-    if state == 'open':
-        if ear < threshold:
-            close_index = frame_index
-
-            state = 'closing'
-            log_print(log_file, 'blink: %d' % (frame_index - close_index + 1))
-            return False
-    elif state == 'closing':
-        if ear < threshold:
-            # still closing
-            if frame_index >= (close_index + length -1):
-                # long enough
-                blink_found = True
-
-                state = 'closed'
-                log_print(log_file, 'blink: True')
-                return True
-            else:
-                log_print(log_file, 'blink: %d' % (frame_index - close_index + 1))
-                return False
-        else:
-            state = 'open'
-    elif state == 'closed':
-        if ear >= threshold:
-            state = 'open'
-        else:
-            log_print(log_file, 'blink: %d' % (frame_index - close_index + 1))
-            return False
-
-    log_print(log_file, 'blink: False')
-    return False
-
 def test_blink_fixed_delta(buffer, ear):
     delta = 0.0
     delta_max = 1.0
@@ -140,8 +98,10 @@ def process_one_video(input_video_path, data_path, start_frame, end_frame):
 
     log_file, timestamp = log_start(data_path, input_video_path)
 
-    log_print(log_file, 'Configuration:')
-    log_print(log_file, '  input video path:  %s' % (input_video_path))
+    log_print(log_file, 'Process video:')
+    log_print(log_file, '  input video path: %s' % (input_video_path))
+    log_print(log_file, '  start frame: %d' % (start_frame))
+    log_print(log_file, '  end frame: %d' % (end_frame))
 
     # remove directory part
     _, file_name = os.path.split(input_video_path)
@@ -157,16 +117,26 @@ def process_one_video(input_video_path, data_path, start_frame, end_frame):
 
     fv = FacialVideo(input_video_path)
 
-    ret = fv.update_static_data(start_frame, end_frame)
+    ret = fv.update_statistic_data(start_frame, end_frame)
 
-    if ret != False:
-        log_print(log_file, '  eye aspect ratio(left):  min %.3f, avg %.3f, max %.3f' % (fv.eye_aspect_ratio[fv.LEFT_EYE][fv.MIN], fv.eye_aspect_ratio[fv.LEFT_EYE][fv.AVG], fv.eye_aspect_ratio[fv.LEFT_EYE][fv.MAX]))
-        log_print(log_file, '  eye aspect ratio(right): min %.3f, avg %.3f, max %.3f' % (fv.eye_aspect_ratio[fv.RIGHT_EYE][fv.MIN], fv.eye_aspect_ratio[fv.RIGHT_EYE][fv.AVG], fv.eye_aspect_ratio[fv.RIGHT_EYE][fv.MAX]))
-        log_print(log_file, '  eye width(left):         min %.3f, avg %.3f, max %.3f' % (fv.eye_width[fv.LEFT_EYE][fv.MIN], fv.eye_width[fv.LEFT_EYE][fv.AVG], fv.eye_width[fv.LEFT_EYE][fv.MAX]))
-        log_print(log_file, '  eye width(right):        min %.3f, avg %.3f, max %.3f' % (fv.eye_width[fv.RIGHT_EYE][fv.MIN], fv.eye_width[fv.RIGHT_EYE][fv.AVG], fv.eye_width[fv.RIGHT_EYE][fv.MAX]))
+    print('Statistic data:')
 
-    #threshold = min_ear * 0.7 + max_ear * 0.3
-    #print('  fixed threshold: %f' % (threshold))
+    if ret == False:
+        print('  fail')
+        return False
+
+    ear_min = fv.get_eye_aspect_ratio(fv.MIN)
+    ear_avg = fv.get_eye_aspect_ratio(fv.AVG)
+    ear_max = fv.get_eye_aspect_ratio(fv.MAX)
+
+    ew_min = fv.get_eye_width(fv.MIN)
+    ew_avg = fv.get_eye_width(fv.AVG)
+    ew_max = fv.get_eye_width(fv.MAX)
+
+    print('  eye aspect ratio(left):  min %.3f, avg %.3f, max %.3f' % (ear_min[fv.LEFT_EYE], ear_avg[fv.LEFT_EYE], ear_max[fv.LEFT_EYE]))
+    print('  eye aspect ratio(right): min %.3f, avg %.3f, max %.3f' % (ear_min[fv.RIGHT_EYE], ear_avg[fv.RIGHT_EYE], ear_max[fv.RIGHT_EYE]))
+    print('  eye width(left):         min %.3f, avg %.3f, max %.3f' % (ew_min[fv.LEFT_EYE], ew_avg[fv.LEFT_EYE], ew_max[fv.LEFT_EYE]))
+    print('  eye width(right):        min %.3f, avg %.3f, max %.3f' % (ew_min[fv.RIGHT_EYE], ew_avg[fv.RIGHT_EYE], ew_max[fv.RIGHT_EYE]))
 
     # 0.1 sec buffering
     #buffer_len = 0.1 * fv.fps
@@ -215,8 +185,8 @@ def process_one_video(input_video_path, data_path, start_frame, end_frame):
             delta = [0.0, 0.0]
             blink_overlap = False
 
-            ear = fv.get_eye_aspect_ratio()
-            ew = fv.get_eye_width()
+            ear = fv.calculate_eye_aspect_ratio()
+            ew = fv.calculate_eye_width()
 
             #blink = test_blink_fixed_threshold(threshold, frame_index, ear_left, log_file)
             blink[0], delta[0] = test_blink_fixed_delta(buffer_left, ear[0])
@@ -328,20 +298,18 @@ def process_one_video(input_video_path, data_path, start_frame, end_frame):
 def process_training_csv(csv_path, data_path):
 
     _, filename = os.path.split(csv_path)
-    print('process_training_csv: %s' % (filename))
+    print('Process training csv: %s' % (filename))
 
     with open(csv_path, 'r', newline = '') as csv_file:
         csv_reader = csv.DictReader(csv_file)
         for row in csv_reader:
             video_path = row['file_name']
-            if video_path == 'file_name':
-                continue
-
             start_frame = int(row['start_frame'])
             end_frame = int(row['end_frame'])
 
             ret = process_one_video(video_path, data_path, start_frame, end_frame)
             if ret == False:
+                print('  fail')
                 return False
 
     print('  success')
@@ -350,7 +318,6 @@ def process_training_csv(csv_path, data_path):
 def main():
     start_time = 0.0
     duration = 0.0
-
 
     # check data directory first
     data_path = os.path.abspath('./blink_data')
@@ -364,28 +331,27 @@ def main():
 
     # parse argument
     parser = argparse.ArgumentParser()
-    parser.add_argument('path', help = 'path to a video file, a directory, or a training recipe file')
+    parser.add_argument('input_path', help = 'path to a video file or a training recipe file')
 
     parser.add_argument('-s', '--start_time', help = 'start time (sec)')
     parser.add_argument('-d', '--duration', help = 'duration (sec)')
 
-
     args = parser.parse_args()
 
-    input_video_path = args.path
-
-    print('User input:')
-    print('  input path: %s' % (input_video_path))
+    input_path = args.input_path
 
     if args.start_time != None:
         start_time = float(args.start_time)
-        print('  start time: %.3f' % (start_time))
 
     if args.duration != None:
         duration = float(args.duration)
-        print('  duration:   %.3f' % (duration))
 
-    _, ext = os.path.splitext(input_video_path)
+    print('User input:')
+    print('  input path: %s' % (input_path))
+    print('  start time: %.3f' % (start_time))
+    print('  duration:   %.3f' % (duration))
+
+    _, ext = os.path.splitext(input_path)
 
     if ext == '.csv':
         if args.start_time != None:
@@ -394,17 +360,17 @@ def main():
             print('  ignore duration')
 
         # could be a training recipe
-        ret = process_training_csv(input_video_path, data_path)
+        ret = process_training_csv(input_path, data_path)
 
-    elif os.path.isfile(input_video_path) != False:
+    elif os.path.isfile(input_path) != False:
         mime = magic.Magic(mime=True)
 
-        file_mine = mime.from_file(input_video_path)
+        file_mine = mime.from_file(input_path)
         if file_mine.find('video') == -1:
             print('  not a video file')
             return False
 
-        fv = FacialVideo(input_video_path)
+        fv = FacialVideo(input_path)
 
         start_frame = int(start_time * fv.fps)
         if duration == 0.0:
@@ -412,38 +378,7 @@ def main():
         else:
             end_frame = start_frame + int(duration * fv.fps) - 1
 
-        ret = process_one_video(input_video_path, data_path, start_frame, duration)
-
-    elif os.path.isdir(input_video_path):
-        if args.start_time != None:
-            print('  ignore start time')
-        if args.duration != None:
-            print('  ignore duration')
-
-        # looking for any video file which name ends with a 'A' or 'B' character
-        prog = re.compile(r'.*[AB]\..+')
-
-        mime = magic.Magic(mime=True)
-        for root, dirs, files in os.walk(input_video_path):
-            for file in files:
-                file_path = os.path.join(root, file)
-
-                file_mine = mime.from_file(file_path)
-                if file_mine.find('video') == -1:
-                    continue
-
-                if prog.match(file) == None:
-                    continue
-
-                fv = FacialVideo(file_path)
-
-                start_frame = int(start_time * fv.fps)
-                if duration == 0.0:
-                    end_frame = fv.frame_count
-                else:
-                    end_frame = start_frame + int(duration * fv.fps) - 1
-
-                ret = process_one_video(file_path, data_path, start_frame, end_frame)
+        ret = process_one_video(input_path, data_path, start_frame, duration)
 
     else:
         print('Unrecognized path')

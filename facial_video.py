@@ -26,8 +26,8 @@ class FacialVideo:
         self.fps = int(self.__cap.get(cv2.CAP_PROP_FPS))
         self.frame_count = int(self.__cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-        engine = FacialEngine(video_path)
-        self.__rotation = engine.get_video_rotation()
+        self.__engine = FacialEngine(video_path)
+        self.__rotation = self.__engine.get_video_rotation()
 
         if self.__rotation == cv2.ROTATE_90_CLOCKWISE or self.__rotation == cv2.ROTATE_90_COUNTERCLOCKWISE:
             temp = self.width
@@ -37,7 +37,7 @@ class FacialVideo:
         self.__frame_index = 0
         self.__csv_data = False
 
-        self.__csv_path = engine.get_csv_data_file()
+        self.__csv_path = self.__engine.get_csv_data_file()
 
         if self.__csv_path != None:
             if os.path.isfile(self.__csv_path) == False:
@@ -54,6 +54,8 @@ class FacialVideo:
                 self.__csv_index = int(self.__csv_row['index'])
             except StopIteration:
                 self.__csv_index = self.frame_count + 1
+
+        self.__statistic_data = False
 
         # initial eye aspect ratio
         self.eye_aspect_ratio = np.zeros((2, 3), dtype = float)
@@ -124,18 +126,28 @@ class FacialVideo:
         return True
 
     def get_frame_index(self):
+        # always available
         return self.__frame_index
 
     def get_landmarks(self):
+        if self.__csv_data == False:
+            print('frame landmarks not available')
+
         return self.__landmarks
 
     def get_rect(self):
+        if self.__csv_data == False:
+            print('frame rect not available')
+
         return self.__rect
 
     def get_time_stamp(self):
+        if self.__csv_data == False:
+            print('frame time stamp not available')
+
         return self.__time_stamp
 
-    def get_eye_aspect_ratio(self, landmarks = None):
+    def calculate_eye_aspect_ratio(self, landmarks = None):
         if landmarks == None:
             landmarks = self.__landmarks
 
@@ -161,7 +173,7 @@ class FacialVideo:
 
         return left, right
 
-    def get_eye_width(self, landmarks = None):
+    def calculate_eye_width(self, landmarks = None):
         if landmarks == None:
             landmarks = self.__landmarks
 
@@ -174,7 +186,7 @@ class FacialVideo:
 
         return left, right
 
-    def update_static_data(self, start = 0, end = 0):
+    def update_statistic_data(self, start = 0, end = 0):
         total_frame = 0
 
         # initial eye aspect ratio
@@ -188,70 +200,78 @@ class FacialVideo:
         self.eye_width[self.RIGHT_EYE][self.MIN] = 10000.0
 
         # open the csv file
-        csvfile = open(self.__csv_path, 'r', newline = '')
-        csv_reader = csv.DictReader(csvfile)
+        with open(self.__csv_path, 'r', newline = '') as csv_file:
+            csv_reader = csv.DictReader(csv_file)
 
-        for csv_row in csv_reader:
-            landmarks = []
+            for csv_row in csv_reader:
+                landmarks = []
 
-            index = int(csv_row['index'])
+                index = int(csv_row['index'])
 
-            if index < start:
-                continue
-            if end != 0:
-                if index > end:
-                    break
+                if index < start:
+                    continue
+                if end != 0:
+                    if index > end:
+                        break
 
-            for n in range(0, 68):
-                x = int(csv_row['mark_%d_x' % (n)])
-                y = int(csv_row['mark_%d_y' % (n)])
+                for n in range(0, 68):
+                    x = int(csv_row['mark_%d_x' % (n)])
+                    y = int(csv_row['mark_%d_y' % (n)])
 
-                landmarks.append((x, y))
+                    landmarks.append((x, y))
 
-            ear = self.get_eye_aspect_ratio(landmarks)
+                ear = self.calculate_eye_aspect_ratio(landmarks)
+                ew = self.calculate_eye_width(landmarks)
 
-            # ear of left eye
-            if ear[self.LEFT_EYE] < self.eye_aspect_ratio[self.LEFT_EYE][self.MIN]:
-                self.eye_aspect_ratio[self.LEFT_EYE][self.MIN] = ear[self.LEFT_EYE]
-            if ear[self.LEFT_EYE] > self.eye_aspect_ratio[self.LEFT_EYE][self.MAX]:
-                self.eye_aspect_ratio[self.LEFT_EYE][self.MAX] = ear[self.LEFT_EYE]
-            self.eye_aspect_ratio[self.LEFT_EYE][self.AVG] += ear[self.LEFT_EYE]
+                eyes = (self.LEFT_EYE, self.RIGHT_EYE)
 
-            # ear of right eye
-            if ear[self.RIGHT_EYE] < self.eye_aspect_ratio[self.RIGHT_EYE][self.MIN]:
-                self.eye_aspect_ratio[self.RIGHT_EYE][self.MIN] = ear[self.RIGHT_EYE]
-            if ear[self.RIGHT_EYE] > self.eye_aspect_ratio[self.RIGHT_EYE][self.MAX]:
-                self.eye_aspect_ratio[self.RIGHT_EYE][self.MAX] = ear[self.RIGHT_EYE]
-            self.eye_aspect_ratio[self.RIGHT_EYE][self.AVG] += ear[self.RIGHT_EYE]
+                for eye in eyes:
+                    if ear[eye] < self.eye_aspect_ratio[eye][self.MIN]:
+                        self.eye_aspect_ratio[eye][self.MIN] = ear[eye]
+                    if ear[eye] > self.eye_aspect_ratio[eye][self.MAX]:
+                        self.eye_aspect_ratio[eye][self.MAX] = ear[eye]
+                    self.eye_aspect_ratio[eye][self.AVG] += ear[eye]
 
-            ew = self.get_eye_width(landmarks)
+                    if ew[eye] < self.eye_width[eye][self.MIN]:
+                        self.eye_width[eye][self.MIN] = ew[eye]
+                    if ew[eye] > self.eye_width[eye][self.MAX]:
+                        self.eye_width[eye][self.MAX] = ew[eye]
+                    self.eye_width[eye][self.AVG] += ew[eye]
 
-            # width of left eye
-            if ew[self.LEFT_EYE] < self.eye_width[self.LEFT_EYE][self.MIN]:
-                self.eye_width[self.LEFT_EYE][self.MIN] = ew[self.LEFT_EYE]
-            if ew[self.LEFT_EYE] > self.eye_width[self.LEFT_EYE][self.MAX]:
-                self.eye_width[self.LEFT_EYE][self.MAX] = ew[self.LEFT_EYE]
-            self.eye_width[self.LEFT_EYE][self.AVG] += ew[self.LEFT_EYE]
-
-            # width of right eye
-            if ew[self.RIGHT_EYE] < self.eye_width[self.RIGHT_EYE][self.MIN]:
-                self.eye_width[self.RIGHT_EYE][self.MIN] = ew[self.RIGHT_EYE]
-            if ew[self.RIGHT_EYE] > self.eye_width[self.RIGHT_EYE][self.MAX]:
-                self.eye_width[self.RIGHT_EYE][self.MAX] = ew[self.RIGHT_EYE]
-            self.eye_width[self.RIGHT_EYE][self.AVG] += ew[self.RIGHT_EYE]
-
-            total_frame += 1
-
-        csvfile.close()
+                total_frame += 1
 
         if total_frame != 0:
-            self.eye_aspect_ratio[self.LEFT_EYE][self.AVG] /= total_frame
-            self.eye_aspect_ratio[self.RIGHT_EYE][self.AVG] /= total_frame
-            self.eye_width[self.LEFT_EYE][self.AVG] /= total_frame
-            self.eye_width[self.RIGHT_EYE][self.AVG] /= total_frame
+            for eye in eyes:
+                self.eye_aspect_ratio[eye][self.AVG] /= total_frame
+                self.eye_width[eye][self.AVG] /= total_frame
+
+            self.__statistic_data = True
             return True
 
+        self.__statistic_data = False
         return False
+
+    def get_eye_aspect_ratio(self, type):
+        if type != self.MIN and type != self.AVG and type != self.MAX:
+            print('get_eye_aspect_ratio: invalid type %s' % (str(type)))
+            return 0.0, 0.0
+
+        if self.__statistic_data == False:
+            print('get_eye_aspect_ratio: data not available')
+            return 0.0, 0.0
+
+        return self.eye_aspect_ratio[self.LEFT_EYE][type], self.eye_width[self.RIGHT_EYE][type]
+
+    def get_eye_width(self, type):
+        if type != self.MIN and type != self.AVG and type != self.MAX:
+            print('get_eye_width: invalid type %s' % (str(type)))
+            return 0.0, 0.0
+
+        if self.__statistic_data == False:
+            print('get_eye_width: data not available')
+            return 0.0, 0.0
+
+        return self.eye_width[self.LEFT_EYE][type], self.eye_width[self.RIGHT_EYE][type]
 
     def find_face_rect(self, start = 0, end = 0):
         rect_left = self.width
@@ -260,33 +280,31 @@ class FacialVideo:
         rect_bottom = 0
 
         # open the csv file
-        csvfile = open(self.__csv_path, 'r', newline = '')
-        csv_reader = csv.DictReader(csvfile)
+        with open(self.__csv_path, 'r', newline = '') as csv_file:
+            csv_reader = csv.DictReader(csv_file)
 
-        for csv_row in csv_reader:
-            index = int(csv_row['index'])
+            for csv_row in csv_reader:
+                index = int(csv_row['index'])
 
-            if index < start:
-                continue
-            if end != 0:
-                if index > end:
-                    break
+                if index < start:
+                    continue
+                if end != 0:
+                    if index > end:
+                        break
 
-            left = int(csv_row['target_left'])
-            top = int(csv_row['target_top'])
-            right = int(csv_row['target_right'])
-            bottom = int(csv_row['target_bottom'])
+                left = int(csv_row['target_left'])
+                top = int(csv_row['target_top'])
+                right = int(csv_row['target_right'])
+                bottom = int(csv_row['target_bottom'])
 
-            if left < rect_left:
-                rect_left = left
-            if top < rect_top:
-                rect_top = top
-            if right > rect_right:
-                rect_right = right
-            if bottom > rect_bottom:
-                rect_bottom = bottom
-
-        csvfile.close()
+                if left < rect_left:
+                    rect_left = left
+                if top < rect_top:
+                    rect_top = top
+                if right > rect_right:
+                    rect_right = right
+                if bottom > rect_bottom:
+                    rect_bottom = bottom
 
         rect = []
         rect.append((rect_left, rect_top))
@@ -294,7 +312,7 @@ class FacialVideo:
 
         return rect
 
-    def find_frames_continuous(self, min_duration = 30):
+    def find_continuous_frames(self, min_duration = 30):
 
         frame_start = 1
         frame_count = 0
@@ -302,70 +320,73 @@ class FacialVideo:
         frames = []
 
         # open the csv file
-        csvfile = open(self.__csv_path, 'r', newline = '')
-        csv_reader = csv.DictReader(csvfile)
+        with open(self.__csv_path, 'r', newline = '') as csv_file:
+            csv_reader = csv.DictReader(csv_file)
 
-        for csv_row in csv_reader:
-            index = int(csv_row['index'])
+            for csv_row in csv_reader:
+                index = int(csv_row['index'])
 
-            if frame_start + frame_count == index:
-                frame_count += 1
-            else:
-                if frame_count >= min_duration:
-                    frames.append((frame_start, frame_start + frame_count - 1))
-                frame_start = index
-                frame_count = 1
+                if frame_start + frame_count == index:
+                    frame_count += 1
+                else:
+                    if frame_count >= min_duration:
+                        frames.append((frame_start, frame_start + frame_count - 1))
+                    frame_start = index
+                    frame_count = 1
 
-        if frame_count >= min_duration:
-            frames.append((frame_start, frame_start + frame_count - 1))
-
-        csvfile.close()
+            if frame_count >= min_duration:
+                frames.append((frame_start, frame_start + frame_count - 1))
 
         return frames
 
-    def find_frames_eye_width_threshold(self, start, end, threshold, min_duration):
-
+    def find_front_face_frames(self, start, end, threshold, min_duration):
         frame_start = start
         frame_count = 0
 
         frames = []
 
         # open the csv file
-        csvfile = open(self.__csv_path, 'r', newline = '')
-        csv_reader = csv.DictReader(csvfile)
+        with open(self.__csv_path, 'r', newline = '') as csv_file:
+            csv_reader = csv.DictReader(csv_file)
 
-        for csv_row in csv_reader:
-            landmarks = []
+            for csv_row in csv_reader:
+                index = int(csv_row['index'])
 
-            index = int(csv_row['index'])
+                if index < start:
+                    continue
+                elif index > end:
+                    break
 
-            if index < start:
-                continue
-            elif index > end:
-                break
+                landmarks = []
+                eye_percent = [0.0, 0.0]
 
-            for n in range(0, 68):
-                x = int(csv_row['mark_%d_x' % (n)])
-                y = int(csv_row['mark_%d_y' % (n)])
+                for n in range(0, 68):
+                    x = int(csv_row['mark_%d_x' % (n)])
+                    y = int(csv_row['mark_%d_y' % (n)])
 
-                landmarks.append((x, y))
+                    landmarks.append((x, y))
 
-            ew = self.get_eye_width(landmarks)
+                eye_width = self.calculate_eye_width(landmarks)
 
-            if (ew[self.LEFT_EYE] * 100.0) > (self.eye_width[self.LEFT_EYE][self.MAX] * threshold) and (ew[self.RIGHT_EYE] * 100.0) > (self.eye_width[self.RIGHT_EYE][self.MAX] * threshold):
-                if frame_start + frame_count == index:
-                    frame_count += 1
-                #else:
-                    # should not happen
-            else:
-                if frame_count >= min_duration:
-                    frames.append((frame_start, frame_start + frame_count - 1))
-                frame_start = index + 1
-                frame_count = 0
+                eyes = (self.LEFT_EYE, self.RIGHT_EYE)
 
-        if frame_count >= min_duration:
-            frames.append((frame_start, frame_start + frame_count - 1))
+                for eye in eyes:
+                    eye_percent[eye] = (eye_width[eye] * 100.0) / self.eye_width[eye][self.MAX]
 
-        csvfile.close()
+                eye_diff = abs(eye_percent[self.LEFT_EYE] - eye_percent[self.RIGHT_EYE])
+
+                if eye_diff <= threshold:
+                    if frame_start + frame_count == index:
+                        frame_count += 1
+                    #else:
+                        # should not happen
+                else:
+                    if frame_count >= min_duration:
+                        frames.append((frame_start, frame_start + frame_count - 1))
+                    frame_start = index + 1
+                    frame_count = 0
+
+            if frame_count >= min_duration:
+                frames.append((frame_start, frame_start + frame_count - 1))
 
         return frames
