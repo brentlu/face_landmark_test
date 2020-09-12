@@ -91,12 +91,12 @@ def process_one_video(input_video_path, min_duration = 30.0, out_duration = 0.0)
 
     return ret, (start_frame, end_frame, width_diff)
 
-def process_training_csv(csv_path, update_csv, use_all):
+def process_training_csv(csv_path, overwrite, use_all):
     csv_fields = ['file_name', 'start_frame', 'end_frame', 'min_duration', 'width_diff', 'pd_stage']
 
     _, filename = os.path.split(csv_path)
     print('Process training csv: %s' % (filename))
-    print('  update_csv: %s' % (str(update_csv)))
+    print('  overwrite: %s' % (str(overwrite)))
     print('  use_all: %s' % (str(use_all)))
 
     # update the record in csv file if found
@@ -109,20 +109,29 @@ def process_training_csv(csv_path, update_csv, use_all):
 
         for row in csv_reader:
             file_name = row['file_name']
+            start_frame = int(row['start_frame'])
             min_duration = float(row['min_duration'])
+
+            if start_frame != 0 and overwrite == False:
+                # copy the rows
+                csv_writer.writerow(row)
+                continue
 
             out_duration = min_duration
             if use_all != False:
                 out_duration = 0.0
 
             ret, (start_frame, end_frame, width_diff) = process_one_video(file_name, min_duration, out_duration)
-            if update_csv != False:
-                if start_frame != 0:
-                    row['start_frame'] = str(start_frame)
-                if end_frame != 0:
-                    row['end_frame'] = str(end_frame)
-                if width_diff != 0:
-                    row['width_diff'] = str(width_diff)
+            if ret == False:
+                print('  fail')
+                return False
+
+            if start_frame != 0:
+                row['start_frame'] = str(start_frame)
+            if end_frame != 0:
+                row['end_frame'] = str(end_frame)
+            if width_diff != 0:
+                row['width_diff'] = str(width_diff)
 
             # copy the rows
             csv_writer.writerow(row)
@@ -134,7 +143,7 @@ def process_training_csv(csv_path, update_csv, use_all):
 
 def main():
     min_duration = 30.0
-    update_csv = False
+    overwrite = False
     use_all = False
 
     # parse argument
@@ -142,7 +151,7 @@ def main():
     parser.add_argument('input_path', help = 'path to a video file or a training recipe file')
 
     parser.add_argument('-d', '--min_duration', help = 'minimum duration (sec)')
-    parser.add_argument("-u", "--update_csv", action = "count", default = 0, help = 'update the recipe')
+    parser.add_argument("-o", "--overwrite", action = "count", default = 0, help = 'overwrite the recipe')
     parser.add_argument("-a", "--use_all", action = "count", default = 0, help = 'use all available frames')
 
     args = parser.parse_args()
@@ -152,8 +161,8 @@ def main():
     if args.min_duration != None:
         min_duration = float(args.min_duration)
 
-    if args.update_csv != 0:
-        update_csv = True
+    if args.overwrite != 0:
+        overwrite = True
 
     if args.use_all != 0:
         use_all = True
@@ -161,7 +170,7 @@ def main():
     print('User input:')
     print('  input path: %s' % (input_path))
     print('  minimum duration: %s' % (str(min_duration)))
-    print('  update csv: %s' % (str(update_csv)))
+    print('  overwrite: %s' % (str(overwrite)))
     print('  use all: %s' % (str(use_all)))
 
     _, ext = os.path.splitext(input_path)
@@ -171,7 +180,7 @@ def main():
             print('  ignore min_duration')
 
         # could be a training recipe
-        ret = process_training_csv(input_path, update_csv, use_all)
+        ret = process_training_csv(input_path, overwrite, use_all)
 
     elif os.path.isfile(input_path) != False:
         mime = magic.Magic(mime=True)
