@@ -72,8 +72,10 @@ def main():
         ret = process_one_video(input_video_path, 'update')
 
     elif os.path.isdir(input_video_path):
-        # looking for any video file which name ends with a 'A' or 'B' character
-        prog = re.compile(r'.*[AB]\..+')
+        # looking for any video file which:
+        # 1. file name ends with a 'A' or 'B' or 'D' character
+        # 2. in the SJCAM subdirectory
+        prog = re.compile(r'.*/SJCAM/.*[ABD]\..+')
 
         mime = magic.Magic(mime=True)
         for root, dirs, files in os.walk(input_video_path):
@@ -84,7 +86,7 @@ def main():
                 if file_mine.find('video') == -1:
                     continue
 
-                if prog.match(file) == None:
+                if prog.match(file_path) == None:
                     continue
 
                 ret = process_one_video(file_path, 'abort')
