@@ -796,13 +796,13 @@ class FacialEngine:
 
 def get_data_path(directory):
     if directory == 'data':
-        return './data'
+        return './video_cache'
     elif directory == 'csv':
-        return './data/csv'
+        return './video_cache/csv'
     elif directory == 'log':
-        return './data/log'
+        return './video_cache/log'
     elif directory == 'video':
-        return './data/video'
+        return './video_cache/video'
     else:
         print('get_data_path: unknown directory %s' % (directory))
 
