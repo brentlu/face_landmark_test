@@ -771,7 +771,7 @@ class FacialEngine:
 
         with open(meta_csv_path, 'r') as csv_file, temp_file:
             csv_reader = csv.DictReader(csv_file)
-            csv_writer = csv.DictWriter(tempfile, fieldnames = self.meta_csv_fields)
+            csv_writer = csv.DictWriter(temp_file, fieldnames = self.meta_csv_fields)
             csv_writer.writeheader()
 
             for row in csv_reader:
@@ -783,7 +783,7 @@ class FacialEngine:
             # append in the end of file
             csv_writer.writerow(csv_row)
 
-        shutil.move(tempfile.name, meta_csv_path)
+        shutil.move(temp_file.name, meta_csv_path)
 
         return rotation
 
