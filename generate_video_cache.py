@@ -14,10 +14,13 @@ def process_one_video(video_path, csv_policy):
     print('process_one_video: %s' % (filename))
 
     engine = FacialEngine(video_path)
+    if engine.init() == False:
+        print('  fail to init engine')
+        return False
 
     ret = engine.configure(csv_policy = csv_policy)
     if ret == False:
-        print('    fail to configure engine')
+        print('  fail to configure engine')
         return False
 
     ret = engine.process_video()

@@ -19,6 +19,10 @@ def process_one_video(file_name, start_frame, end_frame, pd_stage, csv_writer):
 
     fv = FacialVideo(file_name)
 
+    if fv.init() == False:
+        print('  fail to init engine')
+        return ret
+
     print('Process frame:')
     while True:
         frame_index += 1

@@ -118,6 +118,10 @@ def process_one_video(input_video_path, data_path, start_frame, end_frame):
 
     fv = FacialVideo(input_video_path)
 
+    if fv.init() == False:
+        print('  fail to init engine')
+        return False
+
     ret = fv.update_statistic_data(start_frame, end_frame)
 
     print('Statistic data:')
@@ -378,9 +382,13 @@ def main():
         file_mine = mime.from_file(input_path)
         if file_mine.find('video') == -1:
             print('  not a video file')
-            return False
+            return
 
         fv = FacialVideo(input_path)
+
+        if fv.init() == False:
+            print('  fail to init engine')
+            return
 
         start_frame = int(start_time * fv.fps)
         if duration == 0.0:

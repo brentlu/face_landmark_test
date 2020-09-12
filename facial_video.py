@@ -18,6 +18,8 @@ class FacialVideo:
     MAX = 2
 
     def __init__(self, video_path):
+        self.__init = False
+
         # open the video file
         self.__cap = cv2.VideoCapture(video_path)
 
@@ -27,6 +29,11 @@ class FacialVideo:
         self.frame_count = int(self.__cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
         self.__engine = FacialEngine(video_path)
+        if self.__engine.init() == False:
+            print('fv: fail to init engine')
+            self.__cap.release()
+            return
+
         self.__rotation = self.__engine.get_video_rotation()
 
         if self.__rotation == cv2.ROTATE_90_CLOCKWISE or self.__rotation == cv2.ROTATE_90_COUNTERCLOCKWISE:
@@ -42,6 +49,8 @@ class FacialVideo:
         if self.__csv_path != None:
             if os.path.isfile(self.__csv_path) == False:
                 # should not get here
+                print('fv: meta-csv file not exist')
+                self.__cap.release()
                 return
 
             # open the csv file
@@ -67,11 +76,18 @@ class FacialVideo:
         self.eye_width[self.LEFT_EYE][self.MIN] = 1000.0
         self.eye_width[self.RIGHT_EYE][self.MIN] = 1000.0
 
+        self.__init = True
         return
 
     def __del__(self):
+        if self.__init == False:
+            return
+
         self.__csv_file.close()
         self.__cap.release()
+
+    def init(self):
+        return self.__init
 
     def read(self, no_image = False):
         frame = []
@@ -139,19 +155,19 @@ class FacialVideo:
 
     def get_landmarks(self):
         if self.__csv_data == False:
-            print('frame landmarks not available')
+            print('fv: frame landmarks not available')
 
         return self.__landmarks
 
     def get_rect(self):
         if self.__csv_data == False:
-            print('frame rect not available')
+            print('fv: frame rect not available')
 
         return self.__rect
 
     def get_time_stamp(self):
         if self.__csv_data == False:
-            print('frame time stamp not available')
+            print('fv: frame time stamp not available')
 
         return self.__time_stamp
 
@@ -160,7 +176,7 @@ class FacialVideo:
             landmarks = self.__landmarks
 
         if len(landmarks) != 68:
-            print('incomplete landmarks')
+            print('fv: invalid landmarks')
             return 0.0, 0.0
 
         # euclidean distances between the two sets of vertical eye landmarks
@@ -186,7 +202,7 @@ class FacialVideo:
             landmarks = self.__landmarks
 
         if len(landmarks) != 68:
-            print('incomplete landmarks')
+            print('fv: invalid landmarks')
             return 0.0, 0.0
 
         left = dist.euclidean(landmarks[42], landmarks[45])
@@ -261,22 +277,22 @@ class FacialVideo:
 
     def get_eye_aspect_ratio(self, type):
         if type != self.MIN and type != self.AVG and type != self.MAX:
-            print('get_eye_aspect_ratio: invalid type %s' % (str(type)))
+            print('fv: invalid type %s' % (str(type)))
             return 0.0, 0.0
 
         if self.__statistic_data == False:
-            print('get_eye_aspect_ratio: data not available')
+            print('fv: statistic data not available')
             return 0.0, 0.0
 
         return self.eye_aspect_ratio[self.LEFT_EYE][type], self.eye_width[self.RIGHT_EYE][type]
 
     def get_eye_width(self, type):
         if type != self.MIN and type != self.AVG and type != self.MAX:
-            print('get_eye_width: invalid type %s' % (str(type)))
+            print('fv: invalid type %s' % (str(type)))
             return 0.0, 0.0
 
         if self.__statistic_data == False:
-            print('get_eye_width: data not available')
+            print('fv: statistic data not available')
             return 0.0, 0.0
 
         return self.eye_width[self.LEFT_EYE][type], self.eye_width[self.RIGHT_EYE][type]

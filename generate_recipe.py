@@ -15,6 +15,7 @@ def process_one_video(input_video_path, min_duration = 30.0, out_duration = 0.0)
     width_diff = 0
 
     best_found = False
+    ret = False
 
     print('Process video:')
     print('  input video path: %s' % (input_video_path))
@@ -23,12 +24,16 @@ def process_one_video(input_video_path, min_duration = 30.0, out_duration = 0.0)
 
     fv = FacialVideo(input_video_path)
 
+    if fv.init() == False:
+        print('  fail to init engine')
+        return ret, (start_frame, end_frame, width_diff)
+
     print('Statistic data:')
 
     ret = fv.update_statistic_data(1, fv.frame_count)
     if ret == False:
         print('  fail')
-        return False, start_frame, end_frame, width_diff
+        return ret, (start_frame, end_frame, width_diff)
 
     ear_min = fv.get_eye_aspect_ratio(fv.MIN)
     ear_avg = fv.get_eye_aspect_ratio(fv.AVG)
@@ -49,7 +54,7 @@ def process_one_video(input_video_path, min_duration = 30.0, out_duration = 0.0)
 
     if len(segments) == 0:
         print('  none')
-        return False, start_frame, end_frame, width_diff
+        return ret, (start_frame, end_frame, width_diff)
 
     for segment in segments:
         print('  segment: start: %d (%.3f), end: %d (%.3f)' % (segment[0], segment[0] / fv.fps, segment[1], segment[1] / fv.fps))
@@ -81,8 +86,10 @@ def process_one_video(input_video_path, min_duration = 30.0, out_duration = 0.0)
 
     if best_found == False:
         print('  none')
+    else:
+        ret = True
 
-    return start_frame, end_frame, width_diff
+    return ret, (start_frame, end_frame, width_diff)
 
 def process_training_csv(csv_path, update_csv, use_all):
     csv_fields = ['file_name', 'start_frame', 'end_frame', 'min_duration', 'width_diff', 'pd_stage']
@@ -108,7 +115,7 @@ def process_training_csv(csv_path, update_csv, use_all):
             if use_all != False:
                 out_duration = 0.0
 
-            start_frame, end_frame, width_diff = process_one_video(file_name, min_duration, out_duration)
+            ret, (start_frame, end_frame, width_diff) = process_one_video(file_name, min_duration, out_duration)
             if update_csv != False:
                 if start_frame != 0:
                     row['start_frame'] = str(start_frame)
@@ -178,7 +185,7 @@ def main():
         if use_all != False:
             out_duration = 0.0
 
-        start_frame, end_frame, width_diff = process_one_video(input_path, min_duration, out_duration)
+        ret, _ = process_one_video(input_path, min_duration, out_duration)
 
     else:
         print('Unrecognized path')

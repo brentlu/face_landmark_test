@@ -96,22 +96,27 @@ class FacialEngine:
 
 
     def __init__(self, video_path):
+        self.__init = False
+
         # translate to abs path
         self.input_video_path = os.path.abspath(video_path)
 
-        # TODO: check if file exists
+        if os.path.exists(video_path) == False:
+            print('fe: video file not exist')
+            return
+
         mime = magic.Magic(mime=True)
 
         file_mine = mime.from_file(self.input_video_path)
         if file_mine.find('video') == -1:
-            print('  not a video file')
+            print('fe: not a video file')
 
         # first 64KB should be sufficient
         self.input_video_hash = self.calculate_md5_digest(64 * 1024)
 
         # check data directory
         if self.check_data_directory() == False:
-            print('  fail to check data directory')
+            print('fe: fail to check data directory')
             # TODO: raise an exception for this
             return
 
@@ -132,14 +137,21 @@ class FacialEngine:
 
         self.input_csv = False
 
+        self.__init = True
         return
 
     def __del__(self):
+        if self.__init == False:
+            return
+
         # remove old csv file
         if self.input_csv != False:
             os.remove(self.input_csv_path)
 
         return
+
+    def init(self):
+        return self.__init
 
     # calculate md5 hash for input video file
     def calculate_md5_digest(self, size):
