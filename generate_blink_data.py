@@ -238,8 +238,8 @@ def process_one_video(input_video_path, data_path, start_frame, end_frame):
                 deltas.append(delta[0])
 
             # draw landmarks
-            for n in range(0, 68):
-                cv2.circle(frame, landmarks[n], 6, (255, 0, 0), -1)
+            for (x, y) in landmarks:
+                cv2.circle(frame, (x, y), 6, (255, 0, 0), -1)
 
             # draw rect if blink found
             if blink_overlap != False:

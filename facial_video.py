@@ -109,7 +109,7 @@ class FacialVideo:
             frame = cv2.rotate(frame, self.__rotation)
 
         self.__time_stamp = 0.0
-        self.__landmarks = []
+        self.__landmarks = np.zeros((68, 2), dtype = int)
         self.__rect = []
 
         # this frame has no csv data
@@ -125,7 +125,7 @@ class FacialVideo:
             x = int(self.__csv_row['mark_%d_x' % (n)])
             y = int(self.__csv_row['mark_%d_y' % (n)])
 
-            self.__landmarks.append((x, y))
+            self.__landmarks[n] = (x, y)
 
         # update rect
         self.__rect.append((int(self.__csv_row['target_left']), int(self.__csv_row['target_top'])))
@@ -172,7 +172,7 @@ class FacialVideo:
         return self.__time_stamp
 
     def calculate_eye_aspect_ratio(self, landmarks = None):
-        if landmarks == None:
+        if landmarks is None:
             landmarks = self.__landmarks
 
         if len(landmarks) != 68:
@@ -198,7 +198,7 @@ class FacialVideo:
         return left, right
 
     def calculate_eye_width(self, landmarks = None):
-        if landmarks == None:
+        if landmarks is None:
             landmarks = self.__landmarks
 
         if len(landmarks) != 68:
@@ -228,7 +228,7 @@ class FacialVideo:
             csv_reader = csv.DictReader(csv_file)
 
             for csv_row in csv_reader:
-                landmarks = []
+                landmarks = np.zeros((68, 2), dtype = int)
 
                 index = int(csv_row['index'])
 
@@ -242,7 +242,7 @@ class FacialVideo:
                     x = int(csv_row['mark_%d_x' % (n)])
                     y = int(csv_row['mark_%d_y' % (n)])
 
-                    landmarks.append((x, y))
+                    landmarks[n] = (x, y)
 
                 ear = self.calculate_eye_aspect_ratio(landmarks)
                 ew = self.calculate_eye_width(landmarks)
@@ -381,14 +381,14 @@ class FacialVideo:
                 elif index > end:
                     break
 
-                landmarks = []
+                landmarks = np.zeros((68, 2), dtype = int)
                 eye_percent = [0.0, 0.0]
 
                 for n in range(0, 68):
                     x = int(csv_row['mark_%d_x' % (n)])
                     y = int(csv_row['mark_%d_y' % (n)])
 
-                    landmarks.append((x, y))
+                    landmarks[n] = (x, y)
 
                 eye_width = self.calculate_eye_width(landmarks)
 
