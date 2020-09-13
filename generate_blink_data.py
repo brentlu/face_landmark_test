@@ -396,7 +396,7 @@ def main():
         else:
             end_frame = start_frame + int(duration * fv.fps) - 1
 
-        ret = process_one_video(input_path, data_path, start_frame, duration)
+        ret = process_one_video(input_path, data_path, start_frame, end_frame)
 
     else:
         print('Unrecognized path')
