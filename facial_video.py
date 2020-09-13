@@ -76,6 +76,11 @@ class FacialVideo:
         self.eye_width[self.LEFT_EYE][self.MIN] = 1000.0
         self.eye_width[self.RIGHT_EYE][self.MIN] = 1000.0
 
+        # initial eye-to-mouth length
+        self.eye_to_mouth = np.zeros((2, 3), dtype = float)
+        self.eye_to_mouth[self.LEFT_EYE][self.MIN] = 10000.0
+        self.eye_to_mouth[self.RIGHT_EYE][self.MIN] = 10000.0
+
         self.__init = True
         return
 
@@ -210,6 +215,19 @@ class FacialVideo:
 
         return left, right
 
+    def calculate_eye_to_mouth_length(self, landmarks = None):
+        if landmarks is None:
+            landmarks = self.__landmarks
+
+        if len(landmarks) != 68:
+            print('fv: invalid landmarks')
+            return 0.0, 0.0
+
+        left = dist.euclidean(landmarks[36], landmarks[48])
+        right = dist.euclidean(landmarks[45], landmarks[54])
+
+        return left, right
+
     def update_statistic_data(self, start = 0, end = 0):
         total_frame = 0
 
@@ -222,6 +240,11 @@ class FacialVideo:
         self.eye_width = np.zeros((2, 3), dtype = float)
         self.eye_width[self.LEFT_EYE][self.MIN] = 10000.0
         self.eye_width[self.RIGHT_EYE][self.MIN] = 10000.0
+
+        # initial eye-to-mouth length
+        self.eye_to_mouth = np.zeros((2, 3), dtype = float)
+        self.eye_to_mouth[self.LEFT_EYE][self.MIN] = 10000.0
+        self.eye_to_mouth[self.RIGHT_EYE][self.MIN] = 10000.0
 
         # open the csv file
         with open(self.__csv_path, 'r', newline = '') as csv_file:
@@ -246,6 +269,7 @@ class FacialVideo:
 
                 ear = self.calculate_eye_aspect_ratio(landmarks)
                 ew = self.calculate_eye_width(landmarks)
+                em = self.calculate_eye_to_mouth_length(landmarks)
 
                 eyes = (self.LEFT_EYE, self.RIGHT_EYE)
 
@@ -262,12 +286,19 @@ class FacialVideo:
                         self.eye_width[eye][self.MAX] = ew[eye]
                     self.eye_width[eye][self.AVG] += ew[eye]
 
+                    if em[eye] < self.eye_to_mouth[eye][self.MIN]:
+                        self.eye_to_mouth[eye][self.MIN] = em[eye]
+                    if em[eye] > self.eye_to_mouth[eye][self.MAX]:
+                        self.eye_to_mouth[eye][self.MAX] = em[eye]
+                    self.eye_to_mouth[eye][self.AVG] += em[eye]
+
                 total_frame += 1
 
         if total_frame != 0:
             for eye in eyes:
                 self.eye_aspect_ratio[eye][self.AVG] /= total_frame
                 self.eye_width[eye][self.AVG] /= total_frame
+                self.eye_to_mouth[eye][self.AVG] /= total_frame
 
             self.__statistic_data = True
             return True
@@ -296,6 +327,17 @@ class FacialVideo:
             return 0.0, 0.0
 
         return self.eye_width[self.LEFT_EYE][type], self.eye_width[self.RIGHT_EYE][type]
+
+    def get_eye_to_mouth_length(self, type):
+        if type != self.MIN and type != self.AVG and type != self.MAX:
+            print('fv: invalid type %s' % (str(type)))
+            return 0.0, 0.0
+
+        if self.__statistic_data == False:
+            print('fv: statistic data not available')
+            return 0.0, 0.0
+
+        return self.eye_to_mouth[self.LEFT_EYE][type], self.eye_to_mouth[self.RIGHT_EYE][type]
 
     def find_face_rect(self, start = 0, end = 0):
         rect_left = self.width
