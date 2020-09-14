@@ -91,8 +91,8 @@ def process_one_video(input_video_path, min_duration = 30.0, out_duration = 0.0)
 
     return ret, (start_frame, end_frame, width_diff)
 
-def process_training_csv(csv_path, overwrite, use_all):
-    csv_fields = ['file_name', 'start_frame', 'end_frame', 'min_duration', 'width_diff', 'pd_stage']
+def process_training_csv(csv_path, min_duration, overwrite, use_all):
+    csv_fields = ['test', 'date', 'pid', 'type', 'start_frame', 'end_frame', 'duration', 'width_diff', 'data', 'pd_stage']
 
     _, filename = os.path.split(csv_path)
     print('Process training csv: %s' % (filename))
@@ -108,14 +108,18 @@ def process_training_csv(csv_path, overwrite, use_all):
         csv_writer.writeheader()
 
         for row in csv_reader:
-            file_name = row['file_name']
+            file_name = '/media/Temp_AIpose%s/SJCAM/%s_%s%s.mp4' % (row['date'], row['date'], row['pid'], row['type'])
             start_frame = int(row['start_frame'])
-            min_duration = float(row['min_duration'])
 
             if start_frame != 0 and overwrite == False:
                 # copy the rows
                 csv_writer.writerow(row)
                 continue
+
+            if min_duration == 0.0:
+                min_duration = float(row['duration'])
+            else:
+                row['duration'] = str(min_duration)
 
             out_duration = min_duration
             if use_all != False:
@@ -123,15 +127,16 @@ def process_training_csv(csv_path, overwrite, use_all):
 
             ret, (start_frame, end_frame, width_diff) = process_one_video(file_name, min_duration, out_duration)
             if ret == False:
-                print('  fail')
-                return False
+                start_frame = 0
+                end_frame = 0
+                width_diff = 0
 
-            if start_frame != 0:
-                row['start_frame'] = str(start_frame)
-            if end_frame != 0:
-                row['end_frame'] = str(end_frame)
-            if width_diff != 0:
-                row['width_diff'] = str(width_diff)
+            row['start_frame'] = str(start_frame)
+            row['end_frame'] = str(end_frame)
+            row['width_diff'] = str(width_diff)
+
+            # reset the data field
+            row['data'] = '0'
 
             # copy the rows
             csv_writer.writerow(row)
@@ -142,7 +147,7 @@ def process_training_csv(csv_path, overwrite, use_all):
     return True
 
 def main():
-    min_duration = 30.0
+    min_duration = 0.0
     overwrite = False
     use_all = False
 
@@ -180,7 +185,7 @@ def main():
             print('  ignore min_duration')
 
         # could be a training recipe
-        ret = process_training_csv(input_path, overwrite, use_all)
+        ret = process_training_csv(input_path, min_duration, overwrite, use_all)
 
     elif os.path.isfile(input_path) != False:
         mime = magic.Magic(mime=True)
@@ -189,6 +194,9 @@ def main():
         if file_mine.find('video') == -1:
             print('  not a video file')
             return False
+
+        if args.min_duration == None:
+            min_duration = 30.0
 
         out_duration = min_duration
         if use_all != False:

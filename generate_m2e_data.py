@@ -1,21 +1,17 @@
 #!/usr/bin/python3
 
 from facial_video import FacialVideo
-from numpy import ndarray
 from tempfile import NamedTemporaryFile
 import argparse
 import csv
 import cv2
 import magic
 import matplotlib.pyplot as plt
+import numpy as np
 import os
 import shutil
 import time
 
-
-# a test program to
-#   1. draw face landmarks
-#   2. draw a green rectangle on the face if a blink is detected
 
 def log_start(data_path, input_video_path):
 
@@ -58,41 +54,9 @@ def log_print(log_file, string, end = '\n'):
 
     return
 
-def test_blink_fixed_delta(buffer, ear):
-    delta = 0.0
-    delta_max = 1.0
-    ret = False
-
-    buffer_num = len(buffer)
-
-    for n in range(0, buffer_num):
-        delta = ear - buffer[n]
-        if delta < -0.05:
-            ret = True
-
-        if delta < delta_max:
-            delta_max = delta
-
-    if ret != True:
-        for n in range(1, buffer_num):
-            buffer[n - 1] = buffer[n]
-
-        buffer[buffer_num - 1] = ear
-    else:
-        for n in range(0, buffer_num):
-            buffer[n] = 0.0
-
-    return ret, delta_max
-
 def process_one_video(input_video_path, data_path, start_frame, end_frame):
     frame_index = 0
     frame_no_landmarks = 0
-
-    draw_rect = 0
-    draw_text = 0
-    blink_count = 0
-
-    blink_window = [0, 0]
 
     log_file, timestamp = log_start(data_path, input_video_path)
 
@@ -117,7 +81,7 @@ def process_one_video(input_video_path, data_path, start_frame, end_frame):
 
     if fv.init() == False:
         print('  fail to init engine')
-        return False, 0
+        return False, 0.0
 
     ret = fv.update_statistic_data(start_frame, end_frame)
 
@@ -125,27 +89,14 @@ def process_one_video(input_video_path, data_path, start_frame, end_frame):
 
     if ret == False:
         print('  fail')
-        return False, 0
+        return False, 0.0
 
-    ear_min = fv.get_eye_aspect_ratio(fv.MIN)
-    ear_avg = fv.get_eye_aspect_ratio(fv.AVG)
-    ear_max = fv.get_eye_aspect_ratio(fv.MAX)
+    em_min = fv.get_eye_to_mouth_length(fv.MIN)
+    em_avg = fv.get_eye_to_mouth_length(fv.AVG)
+    em_max = fv.get_eye_to_mouth_length(fv.MAX)
 
-    ew_min = fv.get_eye_width(fv.MIN)
-    ew_avg = fv.get_eye_width(fv.AVG)
-    ew_max = fv.get_eye_width(fv.MAX)
-
-    print('  eye aspect ratio(left):  min %.3f, avg %.3f, max %.3f' % (ear_min[fv.LEFT_EYE], ear_avg[fv.LEFT_EYE], ear_max[fv.LEFT_EYE]))
-    print('  eye aspect ratio(right): min %.3f, avg %.3f, max %.3f' % (ear_min[fv.RIGHT_EYE], ear_avg[fv.RIGHT_EYE], ear_max[fv.RIGHT_EYE]))
-    print('  eye width(left):         min %.3f, avg %.3f, max %.3f' % (ew_min[fv.LEFT_EYE], ew_avg[fv.LEFT_EYE], ew_max[fv.LEFT_EYE]))
-    print('  eye width(right):        min %.3f, avg %.3f, max %.3f' % (ew_min[fv.RIGHT_EYE], ew_avg[fv.RIGHT_EYE], ew_max[fv.RIGHT_EYE]))
-
-    # 0.1 sec buffering
-    #buffer_len = 0.1 * fv.fps
-    #ears_buffer = ndarray((buffer_len,), float)
-    #print('buffer_len: %d' % (buffer_len))
-    buffer_left = [0.0] * 3
-    buffer_right = [0.0] * 3
+    print('  eye to mouth(left):      min %.3f, avg %.3f, max %.3f' % (em_min[fv.LEFT_EYE], em_avg[fv.LEFT_EYE], em_max[fv.LEFT_EYE]))
+    print('  eye to mouth(right):     min %.3f, avg %.3f, max %.3f' % (em_min[fv.RIGHT_EYE], em_avg[fv.RIGHT_EYE], em_max[fv.RIGHT_EYE]))
 
     # calculate the output video dimensions
     face_rect = fv.find_face_rect(start_frame, end_frame)
@@ -162,6 +113,9 @@ def process_one_video(input_video_path, data_path, start_frame, end_frame):
                                    fv.fps, (width, height))
 
     log_print(log_file, 'Process frame:')
+
+    em_prev = np.zeros((2, 1), dtype = float)
+    delta_total = np.zeros((2, 1), dtype = float)
 
     while True:
         frame_index += 1
@@ -189,93 +143,27 @@ def process_one_video(input_video_path, data_path, start_frame, end_frame):
             landmarks = fv.get_landmarks()
             rect = fv.get_rect()
 
-            ear = [0.0, 0.0]
-            ew = [0.0, 0.0]
+            em = np.array(fv.calculate_eye_to_mouth_length())
 
-            blink = [False, False]
-            delta = [0.0, 0.0]
-            blink_overlap = False
+            if em_prev[0] != 0.0 or em_prev[1] != 0.0:
+                delta = em - em_prev
+            else:
+                delta = np.zeros((2, 1), dtype = float)
 
-            ear = fv.calculate_eye_aspect_ratio()
-            ew = fv.calculate_eye_width()
+            em_prev = em
 
-            #blink = test_blink_fixed_threshold(threshold, frame_index, ear_left, log_file)
-            blink[0], delta[0] = test_blink_fixed_delta(buffer_left, ear[0])
-            blink[1], delta[1] = test_blink_fixed_delta(buffer_right, ear[1])
+            #length_left = em[fv.LEFT_EYE] * 100.0 / fv.eye_to_mouth[fv.LEFT_EYE][fv.MAX]
+            #length_right = em[fv.RIGHT_EYE] * 100.0 / fv.eye_to_mouth[fv.RIGHT_EYE][fv.MAX]
 
-            log_print(log_file, '  frame: %3d, time: %.3f, ear: %.3f %.3f, width: %3.2f%% %3.2f%%, delta %+.3f %+.3f' % (frame_index, time_stamp, ear[fv.LEFT_EYE], ear[fv.RIGHT_EYE], ew[fv.LEFT_EYE] * 100.0 / fv.eye_width[fv.LEFT_EYE][fv.MAX], ew[fv.RIGHT_EYE] * 100.0 / fv.eye_width[fv.RIGHT_EYE][fv.MAX], delta[0], delta[1]), end = '')
+            log_print(log_file, '  frame: %3d, time: %.3f, length: %.3f %.3f, delta %+.3f %+.3f' % (frame_index, time_stamp, em[fv.LEFT_EYE], em[fv.RIGHT_EYE], delta[0], delta[1]), end = '')
+            log_print(log_file, '')
 
-            if blink[0] != False:
-                blink_window[0] = 2
-            if blink[1] != False:
-                blink_window[1] = 2
-
-            if blink_window[0] != 0 and blink_window[1] != 0:
-                # reset
-                blink_window[0] = 0
-                blink_window[1] = 0
-
-                blink_overlap = True
-
-            if blink_window[0] != 0:
-                blink_window[0] -= 1
-            if blink_window[1] != 0:
-                blink_window[1] -= 1
-
-            if blink_overlap == False:
-                log_print(log_file, '')
-            elif draw_rect > 0:
-                # this one is false blink
-                blink_overlap = False
-                log_print(log_file, ', false blink')
-
-            # draw landmarks
-            for (x, y) in landmarks:
-                cv2.circle(frame, (x, y), 6, (255, 0, 0), -1)
-
-            # draw rect if blink found
-            if blink_overlap != False:
-                draw_rect = 3 # draw the rect for three frames
-                draw_text = 6 # draw the text for six frames
-                blink_count += 1
-                log_print(log_file, ', blink found, count %d' % (blink_count))
-
-            if draw_rect > 0:
-                cv2.rectangle(frame, rect[0], rect[1], (0, 255, 0), 3)
-                draw_rect -= 1
-
-            if draw_text > 0:
-                text = 'Blink: %d' % (blink_count)
-                cv2.putText(frame, str(text), (p1[0] + 10, p1[1] + 50), cv2.FONT_HERSHEY_SIMPLEX, 1.0,
-                            (255, 0, 0), 2, cv2.LINE_AA, False);
-                draw_text -= 1
+            delta_total[0] = delta_total[0] + abs(delta[0])
+            delta_total[1] = delta_total[1] + abs(delta[1])
 
         else:
             log_print(log_file, '  frame: %3d, no landmarks' % (frame_index))
             frame_no_landmarks += 1
-
-            buffer_num = len(buffer_left)
-
-            for n in range(1, buffer_num):
-                buffer_left[n - 1] = buffer_left[n]
-
-            buffer_left[buffer_num - 1] = 0.0
-
-            buffer_num = len(buffer_right)
-
-            for n in range(1, buffer_num):
-                buffer_right[n - 1] = buffer_right[n]
-
-            buffer_right[buffer_num - 1] = 0.0
-
-            if blink_window[0] != 0:
-                blink_window[0] -= 1
-            if blink_window[1] != 0:
-                blink_window[1] -= 1
-            if draw_rect > 0:
-                draw_rect -= 1
-            if draw_text > 0:
-                draw_text -= 1
 
         crop = frame[p1[1]:p2[1], p1[0]:p2[0]]
         video_writer.write(crop)
@@ -285,12 +173,12 @@ def process_one_video(input_video_path, data_path, start_frame, end_frame):
     log_print(log_file, 'Statistic:')
     log_print(log_file, '  total %d frames processed' % (end_frame - start_frame + 1))
     log_print(log_file, '  %d frames (%3.2f%%) has no landmarks' % (frame_no_landmarks, (frame_no_landmarks * 100.0) / (end_frame - start_frame + 1)))
-    log_print(log_file, '  %d blinks found' % (blink_count))
+    log_print(log_file, '  total delta %.3f %.3f' % (delta_total[0], delta_total[1]))
     log_print(log_file, 'Process complete')
 
     log_stop(log_file)
 
-    return True, blink_count
+    return True, (delta_total[0] / em_max[fv.LEFT_EYE]) + (delta_total[1] / em_max[fv.RIGHT_EYE])
 
 def process_training_csv(csv_path, data_path):
     csv_fields = ['test', 'date', 'pid', 'type', 'start_frame', 'end_frame', 'duration', 'width_diff', 'data', 'pd_stage']
@@ -307,7 +195,7 @@ def process_training_csv(csv_path, data_path):
         csv_writer.writeheader()
 
         for row in csv_reader:
-            if row['test'] != 'blink':
+            if row['test'] != 'm2e':
                 # copy the rows
                 csv_writer.writerow(row)
                 continue
@@ -321,12 +209,12 @@ def process_training_csv(csv_path, data_path):
             video_path = '/media/Temp_AIpose%s/SJCAM/%s_%s%s.mp4' % (row['date'], row['date'], row['pid'], row['type'])
             end_frame = int(row['end_frame'])
 
-            ret, blink = process_one_video(video_path, data_path, start_frame, end_frame)
+            ret, delta = process_one_video(video_path, data_path, start_frame, end_frame)
             if ret == False:
                 print('  fail')
                 return False
 
-            row['data'] = int(blink)
+            row['data'] = '%.3f' % (delta)
 
             # copy the rows
             csv_writer.writerow(row)
@@ -341,7 +229,7 @@ def main():
     duration = 0.0
 
     # check data directory first
-    data_path = os.path.abspath('./blink_data')
+    data_path = os.path.abspath('./m2e_data')
     if os.path.isdir(data_path) == False:
         try:
             print('create data directory')
@@ -411,4 +299,4 @@ def main():
     return
 
 if __name__ == '__main__':
-     main()
+    main()
