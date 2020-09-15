@@ -293,7 +293,7 @@ def process_one_video(input_video_path, data_path, start_frame, end_frame):
     return True, blink_count
 
 def process_training_csv(csv_path, data_path):
-    csv_fields = ['test', 'date', 'pid', 'type', 'start_frame', 'end_frame', 'duration', 'width_diff', 'data', 'pd_stage']
+    csv_fields = ['blink', 'm2e', 'date', 'pid', 'type', 'start_frame', 'end_frame', 'duration', 'width_diff', 'data_blink', 'data_m2e', 'pd_stage']
 
     _, filename = os.path.split(csv_path)
     print('Process training csv: %s' % (filename))
@@ -307,7 +307,7 @@ def process_training_csv(csv_path, data_path):
         csv_writer.writeheader()
 
         for row in csv_reader:
-            if row['test'] != 'blink':
+            if row['blink'] != 'yes':
                 # copy the rows
                 csv_writer.writerow(row)
                 continue
@@ -326,7 +326,7 @@ def process_training_csv(csv_path, data_path):
                 print('  fail')
                 return False
 
-            row['data'] = int(blink)
+            row['data_blink'] = int(blink)
 
             # copy the rows
             csv_writer.writerow(row)

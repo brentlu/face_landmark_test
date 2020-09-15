@@ -13,7 +13,7 @@ def find_m2e_csv_row(csv_path, date, pid):
         csv_reader = csv.DictReader(csv_file)
         for row in csv_reader:
 
-            if row['test'] != 'm2e':
+            if row['m2e'] != 'yes':
                 continue
             if row['date'] != date:
                 continue
@@ -40,18 +40,22 @@ def process_training_csv_for_svm(input_path, dataset_path):
             csv_reader = csv.DictReader(csv_file_read)
             for row in csv_reader:
 
-                if row['test'] != 'blink':
+                if row['blink'] != 'yes':
                     continue
 
                 start_frame = int(row['start_frame'])
                 if start_frame == 0:
                     continue
 
-                ret, m2e_row = find_m2e_csv_row(input_path, row['date'], row['pid'])
-                if ret == False:
-                    continue
+                if row['m2e'] != 'yes':
+                    ret, m2e_row = find_m2e_csv_row(input_path, row['date'], row['pid'])
+                    if ret == False:
+                        continue
 
-                dataset_row = [row['data'], m2e_row['data'], row['pd_stage']]
+                    dataset_row = [row['data_blink'], m2e_row['data_m2e'], row['pd_stage']]
+                else:
+                    dataset_row = [row['data_blink'], row['data_m2e'], row['pd_stage']]
+
                 csv_writer.writerow(dataset_row)
 
     return True
@@ -127,7 +131,7 @@ def process_training_csv_for_rnn(input_path, dataset_path):
             csv_reader = csv.DictReader(csv_file_read)
             for row in csv_reader:
 
-                if row['test'] != 'blink':
+                if row['blink'] != 'yes':
                     continue
 
                 start_frame = int(row['start_frame'])
