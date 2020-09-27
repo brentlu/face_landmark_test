@@ -92,7 +92,7 @@ def process_one_video(input_video_path, min_duration = 30.0, out_duration = 0.0)
     return ret, (start_frame, end_frame, width_diff)
 
 def process_training_csv(csv_path, min_duration, overwrite, use_all):
-    csv_fields = ['blink', 'm2e', 'date', 'pid', 'type', 'start_frame', 'end_frame', 'duration', 'width_diff', 'data_blink', 'data_m2e', 'pd_stage']
+    csv_fields = ['blink', 'm2e', 'date', 'pid', 'type', 'start_frame', 'end_frame', 'duration', 'width_diff', 'data_blink', 'data_eh', 'data_m2e', 'pd_stage']
 
     _, filename = os.path.split(csv_path)
     print('Process training csv: %s' % (filename))
@@ -137,6 +137,7 @@ def process_training_csv(csv_path, min_duration, overwrite, use_all):
 
             # reset the data field
             row['data_blink'] = '0'
+            row['data_eh'] = '0'
             row['data_m2e'] = '0'
 
             # copy the rows

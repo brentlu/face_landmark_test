@@ -215,6 +215,19 @@ class FacialVideo:
 
         return left, right
 
+    def calculate_inner_eye_height(self, landmarks = None):
+        if landmarks is None:
+            landmarks = self.__landmarks
+
+        if len(landmarks) != 68:
+            print('fv: invalid landmarks')
+            return 0.0, 0.0
+
+        left = dist.euclidean(landmarks[43], landmarks[47])
+        right = dist.euclidean(landmarks[38], landmarks[40])
+
+        return left, right
+
     def calculate_eye_to_mouth_length(self, landmarks = None):
         if landmarks is None:
             landmarks = self.__landmarks
@@ -240,6 +253,11 @@ class FacialVideo:
         self.eye_width = np.zeros((2, 3), dtype = float)
         self.eye_width[self.LEFT_EYE][self.MIN] = 10000.0
         self.eye_width[self.RIGHT_EYE][self.MIN] = 10000.0
+
+        # initial eye inner height
+        self.inner_eye_height = np.zeros((2, 3), dtype = float)
+        self.inner_eye_height[self.LEFT_EYE][self.MIN] = 10000.0
+        self.inner_eye_height[self.RIGHT_EYE][self.MIN] = 10000.0
 
         # initial eye-to-mouth length
         self.eye_to_mouth = np.zeros((2, 3), dtype = float)
@@ -269,6 +287,7 @@ class FacialVideo:
 
                 ear = self.calculate_eye_aspect_ratio(landmarks)
                 ew = self.calculate_eye_width(landmarks)
+                ieh = self.calculate_inner_eye_height(landmarks)
                 em = self.calculate_eye_to_mouth_length(landmarks)
 
                 eyes = (self.LEFT_EYE, self.RIGHT_EYE)
@@ -286,6 +305,12 @@ class FacialVideo:
                         self.eye_width[eye][self.MAX] = ew[eye]
                     self.eye_width[eye][self.AVG] += ew[eye]
 
+                    if ieh[eye] < self.inner_eye_height[eye][self.MIN]:
+                        self.inner_eye_height[eye][self.MIN] = ieh[eye]
+                    if ieh[eye] > self.inner_eye_height[eye][self.MAX]:
+                        self.inner_eye_height[eye][self.MAX] = ieh[eye]
+                    self.inner_eye_height[eye][self.AVG] += ieh[eye]
+
                     if em[eye] < self.eye_to_mouth[eye][self.MIN]:
                         self.eye_to_mouth[eye][self.MIN] = em[eye]
                     if em[eye] > self.eye_to_mouth[eye][self.MAX]:
@@ -298,6 +323,7 @@ class FacialVideo:
             for eye in eyes:
                 self.eye_aspect_ratio[eye][self.AVG] /= total_frame
                 self.eye_width[eye][self.AVG] /= total_frame
+                self.inner_eye_height[eye][self.AVG] /= total_frame
                 self.eye_to_mouth[eye][self.AVG] /= total_frame
 
             self.__statistic_data = True
@@ -327,6 +353,17 @@ class FacialVideo:
             return 0.0, 0.0
 
         return self.eye_width[self.LEFT_EYE][type], self.eye_width[self.RIGHT_EYE][type]
+
+    def get_inner_eye_height(self, type):
+        if type != self.MIN and type != self.AVG and type != self.MAX:
+            print('fv: invalid type %s' % (str(type)))
+            return 0.0, 0.0
+
+        if self.__statistic_data == False:
+            print('fv: statistic data not available')
+            return 0.0, 0.0
+
+        return self.inner_eye_height[self.LEFT_EYE][type], self.inner_eye_height[self.RIGHT_EYE][type]
 
     def get_eye_to_mouth_length(self, type):
         if type != self.MIN and type != self.AVG and type != self.MAX:
