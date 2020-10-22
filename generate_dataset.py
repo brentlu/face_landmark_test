@@ -52,9 +52,9 @@ def process_training_csv_for_svm(input_path, dataset_path):
                     if ret == False:
                         continue
 
-                    dataset_row = [row['data_blink'], m2e_row['data_m2e'], row['pd_stage']]
+                    dataset_row = [row['data_blink'], row['data_eh'], m2e_row['data_m2e'], row['pd_stage']]
                 else:
-                    dataset_row = [row['data_blink'], row['data_m2e'], row['pd_stage']]
+                    dataset_row = [row['data_blink'], row['data_eh'], row['data_m2e'], row['pd_stage']]
 
                 csv_writer.writerow(dataset_row)
 

@@ -8,6 +8,7 @@ import csv
 import cv2
 import magic
 import matplotlib.pyplot as plt
+import numpy as np
 import os
 import shutil
 import time
@@ -84,7 +85,7 @@ def test_blink_fixed_delta(buffer, ear):
 
     return ret, delta_max
 
-def process_one_video(input_video_path, data_path, start_frame, end_frame):
+def process_one_video_blink(input_video_path, log_file, output_video_path, start_frame, end_frame):
     frame_index = 0
     frame_no_landmarks = 0
 
@@ -94,37 +95,24 @@ def process_one_video(input_video_path, data_path, start_frame, end_frame):
 
     blink_window = [0, 0]
 
-    log_file, timestamp = log_start(data_path, input_video_path)
-
-    log_print(log_file, 'Process video:')
+    log_print(log_file, 'Process video (blink):')
     log_print(log_file, '  input video path: %s' % (input_video_path))
+    log_print(log_file, '  output video path: %s' % (output_video_path))
     log_print(log_file, '  start frame: %d' % (start_frame))
     log_print(log_file, '  end frame: %d' % (end_frame))
-
-    # remove directory part
-    _, file_name = os.path.split(input_video_path)
-
-    # remove ext part
-    file_name, _ = os.path.splitext(file_name)
-
-    file_name = '%s-%s.mp4' % (file_name, timestamp)
-    output_video_path = os.path.join(data_path, file_name)
-    output_video_path = os.path.abspath(output_video_path)
-
-    log_print(log_file, '  output video path: %s' % (output_video_path))
 
     fv = FacialVideo(input_video_path)
 
     if fv.init() == False:
-        print('  fail to init engine')
+        log_print(log_file, '  fail to init engine')
         return False, 0
 
     ret = fv.update_statistic_data(start_frame, end_frame)
 
-    print('Statistic data:')
+    log_print(log_file, 'Statistic data:')
 
     if ret == False:
-        print('  fail')
+        log_print(log_file, '  fail')
         return False, 0
 
     ear_min = fv.get_eye_aspect_ratio(fv.MIN)
@@ -135,10 +123,10 @@ def process_one_video(input_video_path, data_path, start_frame, end_frame):
     ew_avg = fv.get_eye_width(fv.AVG)
     ew_max = fv.get_eye_width(fv.MAX)
 
-    print('  eye aspect ratio(left):  min %.3f, avg %.3f, max %.3f' % (ear_min[fv.LEFT_EYE], ear_avg[fv.LEFT_EYE], ear_max[fv.LEFT_EYE]))
-    print('  eye aspect ratio(right): min %.3f, avg %.3f, max %.3f' % (ear_min[fv.RIGHT_EYE], ear_avg[fv.RIGHT_EYE], ear_max[fv.RIGHT_EYE]))
-    print('  eye width(left):         min %.3f, avg %.3f, max %.3f' % (ew_min[fv.LEFT_EYE], ew_avg[fv.LEFT_EYE], ew_max[fv.LEFT_EYE]))
-    print('  eye width(right):        min %.3f, avg %.3f, max %.3f' % (ew_min[fv.RIGHT_EYE], ew_avg[fv.RIGHT_EYE], ew_max[fv.RIGHT_EYE]))
+    log_print(log_file, '  eye aspect ratio(left):  min %.3f, avg %.3f, max %.3f' % (ear_min[fv.LEFT_EYE], ear_avg[fv.LEFT_EYE], ear_max[fv.LEFT_EYE]))
+    log_print(log_file, '  eye aspect ratio(right): min %.3f, avg %.3f, max %.3f' % (ear_min[fv.RIGHT_EYE], ear_avg[fv.RIGHT_EYE], ear_max[fv.RIGHT_EYE]))
+    log_print(log_file, '  eye width(left):         min %.3f, avg %.3f, max %.3f' % (ew_min[fv.LEFT_EYE], ew_avg[fv.LEFT_EYE], ew_max[fv.LEFT_EYE]))
+    log_print(log_file, '  eye width(right):        min %.3f, avg %.3f, max %.3f' % (ew_min[fv.RIGHT_EYE], ew_avg[fv.RIGHT_EYE], ew_max[fv.RIGHT_EYE]))
 
     # 0.1 sec buffering
     #buffer_len = 0.1 * fv.fps
@@ -181,7 +169,7 @@ def process_one_video(input_video_path, data_path, start_frame, end_frame):
             break;
 
         if frame_index != fv.get_frame_index():
-            print('  expect frame %d but got %d' %(frame_index, fv.get_frame_index()))
+            log_print(log_file, '  expect frame %d but got %d' %(frame_index, fv.get_frame_index()))
             break
 
         if fv.available() != False:
@@ -288,12 +276,95 @@ def process_one_video(input_video_path, data_path, start_frame, end_frame):
     log_print(log_file, '  %d blinks found' % (blink_count))
     log_print(log_file, 'Process complete')
 
-    log_stop(log_file)
-
     return True, blink_count
 
+def process_one_video_inner_eye_height(input_video_path, log_file, start_frame, end_frame):
+    frame_index = 0
+    frame_no_landmarks = 0
+
+    log_print(log_file, 'Process video (eye inner height):')
+    log_print(log_file, '  input video path: %s' % (input_video_path))
+    log_print(log_file, '  start frame: %d' % (start_frame))
+    log_print(log_file, '  end frame: %d' % (end_frame))
+
+    fv = FacialVideo(input_video_path)
+
+    if fv.init() == False:
+        log_print(log_file, '  fail to init engine')
+        return False, 0
+
+    ret = fv.update_statistic_data(start_frame, end_frame)
+
+    log_print(log_file, 'Statistic data:')
+
+    if ret == False:
+        log_print(log_file, '  fail')
+        return False, 0
+
+    ieh_min = fv.get_inner_eye_height(fv.MIN)
+    ieh_avg = fv.get_inner_eye_height(fv.AVG)
+    ieh_max = fv.get_inner_eye_height(fv.MAX)
+
+    log_print(log_file, '  eye inner height(left):  min %.3f, avg %.3f, max %.3f' % (ieh_min[fv.LEFT_EYE], ieh_avg[fv.LEFT_EYE], ieh_max[fv.LEFT_EYE]))
+    log_print(log_file, '  eye inner height(right): min %.3f, avg %.3f, max %.3f' % (ieh_min[fv.RIGHT_EYE], ieh_avg[fv.RIGHT_EYE], ieh_max[fv.RIGHT_EYE]))
+
+    ieh_prev = np.zeros((2, 1), dtype = float)
+    delta_total = np.zeros((2, 1), dtype = float)
+
+    log_print(log_file, 'Process frame:')
+
+    while True:
+        frame_index += 1
+
+        if frame_index < start_frame:
+            # don't decode this frame to speed up
+            ret, _ = fv.read(True)
+            continue
+        elif frame_index > end_frame:
+            break
+        else:
+            # don't decode this frame to speed up
+            ret, frame = fv.read(True)
+
+        if ret == False:
+            # no frame to process
+            break;
+
+        if frame_index != fv.get_frame_index():
+            log_print(log_file, '  expect frame %d but got %d' %(frame_index, fv.get_frame_index()))
+            break
+
+        if fv.available() != False:
+            time_stamp = (frame_index - start_frame) / fv.fps
+
+            ieh = np.array(fv.calculate_inner_eye_height())
+
+            if ieh_prev[0] != 0.0 or ieh_prev[1] != 0.0:
+                delta = ieh - ieh_prev
+            else:
+                delta = np.zeros((2, 1), dtype = float)
+
+            ieh_prev = ieh
+
+            log_print(log_file, '  frame: %3d, time: %.3f, height: %.3f %.3f, delta %+.3f %+.3f' % (frame_index, time_stamp, ieh[fv.LEFT_EYE], ieh[fv.RIGHT_EYE], delta[0], delta[1]), end = '')
+            log_print(log_file, '')
+
+            delta_total[0] = delta_total[0] + abs(delta[0])
+            delta_total[1] = delta_total[1] + abs(delta[1])
+        else:
+            log_print(log_file, '  frame: %3d, no landmarks' % (frame_index))
+            frame_no_landmarks += 1
+
+    log_print(log_file, 'Statistic:')
+    log_print(log_file, '  total %d frames processed' % (end_frame - start_frame + 1))
+    log_print(log_file, '  %d frames (%3.2f%%) has no landmarks' % (frame_no_landmarks, (frame_no_landmarks * 100.0) / (end_frame - start_frame + 1)))
+    log_print(log_file, '  total delta %.3f %.3f' % (delta_total[0], delta_total[1]))
+    log_print(log_file, 'Process complete')
+
+    return True, (delta_total[0] / ieh_max[fv.LEFT_EYE]) + (delta_total[1] / ieh_max[fv.RIGHT_EYE])
+
 def process_training_csv(csv_path, data_path):
-    csv_fields = ['blink', 'm2e', 'date', 'pid', 'type', 'start_frame', 'end_frame', 'duration', 'width_diff', 'data_blink', 'data_m2e', 'pd_stage']
+    csv_fields = ['blink', 'm2e', 'date', 'pid', 'type', 'start_frame', 'end_frame', 'duration', 'width_diff', 'data_blink', 'data_eh', 'data_m2e', 'pd_stage']
 
     _, filename = os.path.split(csv_path)
     print('Process training csv: %s' % (filename))
@@ -321,12 +392,35 @@ def process_training_csv(csv_path, data_path):
             video_path = '/media/Temp_AIpose%s/SJCAM/%s_%s%s.mp4' % (row['date'], row['date'], row['pid'], row['type'])
             end_frame = int(row['end_frame'])
 
-            ret, blink = process_one_video(video_path, data_path, start_frame, end_frame)
-            if ret == False:
-                print('  fail')
-                return False
+            log_file, timestamp = log_start(data_path, video_path)
 
-            row['data_blink'] = int(blink)
+            if int(row['data_blink']) == 0:
+                # remove directory part
+                _, file_name = os.path.split(video_path)
+
+                # remove ext part
+                file_name, _ = os.path.splitext(file_name)
+
+                file_name = '%s-%s.mp4' % (file_name, timestamp)
+                output_video_path = os.path.join(data_path, file_name)
+                output_video_path = os.path.abspath(output_video_path)
+
+                ret, blink = process_one_video_blink(video_path, log_file, output_video_path, start_frame, end_frame)
+                if ret == False:
+                    print('  fail')
+                    return False
+
+                row['data_blink'] = str(blink)
+
+            if int(row['data_eh']) == 0:
+                ret, delta = process_one_video_inner_eye_height(video_path, log_file, start_frame, end_frame)
+                if ret == False:
+                    print('  fail')
+                    return False
+
+                row['data_eh'] = '%.3f' % (delta)
+
+            log_stop(log_file)
 
             # copy the rows
             csv_writer.writerow(row)
@@ -403,8 +497,21 @@ def main():
         else:
             end_frame = start_frame + int(duration * fv.fps) - 1
 
-        ret, _ = process_one_video(input_path, data_path, start_frame, end_frame)
+        log_file, timestamp = log_start(data_path, video_path)
 
+        # remove directory part
+        _, file_name = os.path.split(input_video_path)
+
+        # remove ext part
+        file_name, _ = os.path.splitext(file_name)
+
+        file_name = '%s-%s.mp4' % (file_name, timestamp)
+        output_video_path = os.path.join(data_path, file_name)
+        output_video_path = os.path.abspath(output_video_path)
+
+        ret, _ = process_one_video_blink(input_path, log_file, output_video_path, start_frame, end_frame)
+
+        log_stop(log_file)
     else:
         print('Unrecognized path')
 
