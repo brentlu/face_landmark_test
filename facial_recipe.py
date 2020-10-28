@@ -89,8 +89,17 @@ class FacialRecipe:
 
 
     # standard get/set functions
+    def get_blink(self):
+        if self.__csv_data == False:
+            return 0
+
+        return self.csv_row['blink']
+
     def get_start_frame(self):
         if self.__csv_data == False:
+            return 0
+
+        if self.csv_row['start_frame'] == '':
             return 0
 
         return int(self.csv_row['start_frame'])
@@ -100,6 +109,15 @@ class FacialRecipe:
             return
 
         self.csv_row['start_frame'] = str(start_frame)
+
+    def get_end_frame(self):
+        if self.__csv_data == False:
+            return 0
+
+        if self.csv_row['end_frame'] == '':
+            return 0
+
+        return int(self.csv_row['end_frame'])
 
     def set_end_frame(self, end_frame):
         if self.__csv_data == False:
@@ -111,13 +129,16 @@ class FacialRecipe:
         if self.__csv_data == False:
             return 0.0
 
+        if self.csv_row['duration'] == '':
+            return 0.0
+
         return float(self.csv_row['duration'])
 
     def set_duration(self, duration):
         if self.__csv_data == False:
             return
 
-        self.csv_row['duration'] = str(duration)
+        self.csv_row['duration'] = '%.3f' % (duration)
 
     def set_width_diff(self, width_diff):
         if self.__csv_data == False:
@@ -125,17 +146,35 @@ class FacialRecipe:
 
         self.csv_row['width_diff'] = str(width_diff)
 
+    def get_data_blink(self):
+        if self.__csv_data == False:
+            return 0
+
+        if self.csv_row['data_blink'] == '':
+            return 0
+
+        return int(self.csv_row['data_blink'])
+
     def set_data_blink(self, data_blink):
         if self.__csv_data == False:
             return
 
         self.csv_row['data_blink'] = str(data_blink)
 
+    def get_data_eh(self):
+        if self.__csv_data == False:
+            return 0.0
+
+        if self.csv_row['data_eh'] == '':
+            return 0.0
+
+        return float(self.csv_row['data_eh'])
+
     def set_data_eh(self, data_eh):
         if self.__csv_data == False:
             return
 
-        self.csv_row['data_eh'] = str(data_eh)
+        self.csv_row['data_eh'] = '%.3f' % (data_eh)
 
     def set_data_m2e(self, data_m2e):
         if self.__csv_data == False:

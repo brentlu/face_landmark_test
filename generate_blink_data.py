@@ -1,16 +1,14 @@
 #!/usr/bin/python3
 
+from facial_recipe import FacialRecipe
 from facial_video import FacialVideo
 from numpy import ndarray
-from tempfile import NamedTemporaryFile
 import argparse
-import csv
 import cv2
 import magic
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-import shutil
 import time
 
 
@@ -364,68 +362,56 @@ def process_one_video_inner_eye_height(input_video_path, log_file, start_frame, 
     return True, (delta_total[0] / ieh_max[fv.LEFT_EYE]) + (delta_total[1] / ieh_max[fv.RIGHT_EYE])
 
 def process_training_csv(csv_path, data_path):
-    csv_fields = ['blink', 'm2e', 'date', 'pid', 'type', 'start_frame', 'end_frame', 'duration', 'width_diff', 'data_blink', 'data_eh', 'data_m2e', 'pd_stage']
 
     _, filename = os.path.split(csv_path)
     print('Process training csv: %s' % (filename))
 
-    # update the record in csv file if found
-    temp_file = NamedTemporaryFile(mode = 'w', delete = False)
+    fr = FacialRecipe(csv_path)
 
-    with open(csv_path, 'r') as csv_file, temp_file:
-        csv_reader = csv.DictReader(csv_file)
-        csv_writer = csv.DictWriter(temp_file, fieldnames = csv_fields)
-        csv_writer.writeheader()
+    if fr.init() == False:
+        print('  fail to init recipe')
+        return False
 
-        for row in csv_reader:
-            if row['blink'] != 'yes':
-                # copy the rows
-                csv_writer.writerow(row)
-                continue
+    while fr.read_next() != False:
+        if fr.get_blink() != 'yes':
+            continue
 
-            start_frame = int(row['start_frame'])
-            if start_frame == 0:
-                # copy the rows
-                csv_writer.writerow(row)
-                continue
+        start_frame = fr.get_start_frame()
+        if start_frame == 0:
+            continue
 
-            video_path = '/media/Temp_AIpose%s/SJCAM/%s_%s%s.mp4' % (row['date'], row['date'], row['pid'], row['type'])
-            end_frame = int(row['end_frame'])
+        video_path = fr.get_file_path()
+        end_frame = fr.get_end_frame()
 
-            log_file, timestamp = log_start(data_path, video_path)
+        log_file, timestamp = log_start(data_path, video_path)
 
-            if int(row['data_blink']) == 0:
-                # remove directory part
-                _, file_name = os.path.split(video_path)
+        if fr.get_data_blink() == 0:
+            # remove directory part
+            _, file_name = os.path.split(video_path)
 
-                # remove ext part
-                file_name, _ = os.path.splitext(file_name)
+            # remove ext part
+            file_name, _ = os.path.splitext(file_name)
 
-                file_name = '%s-%s.mp4' % (file_name, timestamp)
-                output_video_path = os.path.join(data_path, file_name)
-                output_video_path = os.path.abspath(output_video_path)
+            file_name = '%s-%s.mp4' % (file_name, timestamp)
+            output_video_path = os.path.join(data_path, file_name)
+            output_video_path = os.path.abspath(output_video_path)
 
-                ret, blink = process_one_video_blink(video_path, log_file, output_video_path, start_frame, end_frame)
-                if ret == False:
-                    print('  fail')
-                    return False
+            ret, blink = process_one_video_blink(video_path, log_file, output_video_path, start_frame, end_frame)
+            if ret == False:
+                print('  fail')
+                return False
 
-                row['data_blink'] = str(blink)
+            fr.set_data_blink(blink)
 
-            if int(row['data_eh']) == 0:
-                ret, delta = process_one_video_inner_eye_height(video_path, log_file, start_frame, end_frame)
-                if ret == False:
-                    print('  fail')
-                    return False
+        if fr.get_data_eh() == 0.0:
+            ret, delta = process_one_video_inner_eye_height(video_path, log_file, start_frame, end_frame)
+            if ret == False:
+                print('  fail')
+                return False
 
-                row['data_eh'] = '%.3f' % (delta)
+            fr.set_data_eh(delta)
 
-            log_stop(log_file)
-
-            # copy the rows
-            csv_writer.writerow(row)
-
-    shutil.move(temp_file.name, csv_path)
+        log_stop(log_file)
 
     print('  success')
     return True
