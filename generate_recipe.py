@@ -1,12 +1,10 @@
 #!/usr/bin/python3
 
+from facial_recipe import FacialRecipe
 from facial_video import FacialVideo
-from tempfile import NamedTemporaryFile
 import argparse
-import csv
 import magic
 import os
-import shutil
 
 
 def process_one_video(input_video_path, min_duration = 30.0, out_duration = 0.0):
@@ -92,58 +90,45 @@ def process_one_video(input_video_path, min_duration = 30.0, out_duration = 0.0)
     return ret, (start_frame, end_frame, width_diff)
 
 def process_training_csv(csv_path, min_duration, overwrite, use_all):
-    csv_fields = ['blink', 'm2e', 'date', 'pid', 'type', 'start_frame', 'end_frame', 'duration', 'width_diff', 'data_blink', 'data_eh', 'data_m2e', 'pd_stage']
 
     _, filename = os.path.split(csv_path)
     print('Process training csv: %s' % (filename))
     print('  overwrite: %s' % (str(overwrite)))
     print('  use_all: %s' % (str(use_all)))
 
-    # update the record in csv file if found
-    temp_file = NamedTemporaryFile(mode = 'w', delete = False)
+    fr = FacialRecipe(csv_path)
 
-    with open(csv_path, 'r') as csv_file, temp_file:
-        csv_reader = csv.DictReader(csv_file)
-        csv_writer = csv.DictWriter(temp_file, fieldnames = csv_fields)
-        csv_writer.writeheader()
+    if fr.init() == False:
+        print('  fail to init recipe')
+        return False
 
-        for row in csv_reader:
-            file_name = '/media/Temp_AIpose%s/SJCAM/%s_%s%s.mp4' % (row['date'], row['date'], row['pid'], row['type'])
-            start_frame = int(row['start_frame'])
+    while fr.read_next() != False:
+        if fr.get_start_frame() != 0 and overwrite == False:
+            continue
 
-            if start_frame != 0 and overwrite == False:
-                # copy the rows
-                csv_writer.writerow(row)
-                continue
+        file_path = fr.get_file_path()
 
-            if min_duration == 0.0:
-                min_duration = float(row['duration'])
-            else:
-                row['duration'] = str(min_duration)
+        if min_duration == 0.0:
+            min_duration = fr.get_duration()
+        else:
+            fr.set_duration(min_duration)
 
-            out_duration = min_duration
-            if use_all != False:
-                out_duration = 0.0
+        out_duration = min_duration
+        if use_all != False:
+            out_duration = 0.0
 
-            ret, (start_frame, end_frame, width_diff) = process_one_video(file_name, min_duration, out_duration)
-            if ret == False:
-                start_frame = 0
-                end_frame = 0
-                width_diff = 0
+        ret, (start_frame, end_frame, width_diff) = process_one_video(file_path, min_duration, out_duration)
+        if ret == False:
+            start_frame = 0
+            end_frame = 0
+            width_diff = 0
 
-            row['start_frame'] = str(start_frame)
-            row['end_frame'] = str(end_frame)
-            row['width_diff'] = str(width_diff)
+        fr.set_start_frame(start_frame)
+        fr.set_end_frame(end_frame)
+        fr.set_width_diff(width_diff)
 
-            # reset the data field
-            row['data_blink'] = '0'
-            row['data_eh'] = '0'
-            row['data_m2e'] = '0'
-
-            # copy the rows
-            csv_writer.writerow(row)
-
-    shutil.move(temp_file.name, csv_path)
+        # reset the data field
+        fr.reset_data_fields()
 
     print('  success')
     return True
