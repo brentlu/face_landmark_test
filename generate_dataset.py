@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+from facial_recipe import FacialRecipe
 from facial_video import FacialVideo
 import argparse
 import csv
@@ -7,56 +8,33 @@ import os
 import time
 
 
-def find_m2e_csv_row(csv_path, date, pid):
-
-    with open(csv_path, 'r') as csv_file:
-        csv_reader = csv.DictReader(csv_file)
-        for row in csv_reader:
-
-            if row['m2e'] != 'yes':
-                continue
-            if row['date'] != date:
-                continue
-            if row['pid'] != pid:
-                continue
-            start_frame = int(row['start_frame'])
-            if start_frame == 0:
-                continue
-
-            return True, row
-
-    return False, None
-
 def process_training_csv_for_svm(input_path, dataset_path):
 
     _, filename = os.path.split(input_path)
     print('Process training csv: %s' % (filename))
     print('  dataset path: %s' % (dataset_path))
 
+    fr = FacialRecipe(input_path)
+
+    if fr.init() == False:
+        print('  fail to init recipe')
+        return False
+
     with open(dataset_path, 'w', newline = '') as csv_file_write:
         csv_writer = csv.writer(csv_file_write)
 
-        with open(input_path, 'r', newline = '') as csv_file_read:
-            csv_reader = csv.DictReader(csv_file_read)
-            for row in csv_reader:
+        while fr.read_next() != False:
+            if fr.get_blink() != 'yes':
+                continue
 
-                if row['blink'] != 'yes':
-                    continue
+            start_frame = fr.get_start_frame()
+            if start_frame == 0:
+                continue
 
-                start_frame = int(row['start_frame'])
-                if start_frame == 0:
-                    continue
-
-                if row['m2e'] != 'yes':
-                    ret, m2e_row = find_m2e_csv_row(input_path, row['date'], row['pid'])
-                    if ret == False:
-                        continue
-
-                    dataset_row = [row['data_blink'], row['data_eh'], m2e_row['data_m2e'], row['pd_stage']]
-                else:
-                    dataset_row = [row['data_blink'], row['data_eh'], row['data_m2e'], row['pd_stage']]
-
-                csv_writer.writerow(dataset_row)
+            if fr.get_m2e() != 'yes':
+                dataset_row = [fr.get_data_blink(), fr.get_data_eh(), fr.find_data_m2e(), fr.get_pd_stage()]
+            else:
+                dataset_row = [fr.get_data_blink(), fr.get_data_eh(), fr.get_data_m2e(), fr.get_pd_stage()]
 
     return True
 
@@ -124,28 +102,31 @@ def process_training_csv_for_rnn(input_path, dataset_path):
     print('Process training csv: %s' % (filename))
     print('  dataset path: %s' % (dataset_path))
 
+    fr = FacialRecipe(input_path)
+
+    if fr.init() == False:
+        print('  fail to init recipe')
+        return False
+
     with open(dataset_path, 'w', newline = '') as csv_file_write:
         csv_writer = csv.writer(csv_file_write)
 
-        with open(input_path, 'r', newline = '') as csv_file_read:
-            csv_reader = csv.DictReader(csv_file_read)
-            for row in csv_reader:
+        while fr.read_next() != False:
+            if fr.get_blink() != 'yes':
+                continue
 
-                if row['blink'] != 'yes':
-                    continue
+            start_frame = fr.get_start_frame()
+            if start_frame == 0:
+                continue
 
-                start_frame = int(row['start_frame'])
-                if start_frame == 0:
-                    continue
+            video_path = fr.get_file_path()
+            end_frame = fr.get_end_frame()
+            pd_stage = fr.get_pd_stage()
 
-                video_path = '/media/Temp_AIpose%s/SJCAM/%s_%s%s.mp4' % (row['date'], row['date'], row['pid'], row['type'])
-                end_frame = int(row['end_frame'])
-                pd_stage = int(row['pd_stage'])
-
-                ret = process_one_video_for_rnn(video_path, start_frame, end_frame, pd_stage, csv_writer)
-                if ret == False:
-                    print('  fail')
-                    return False
+            ret = process_one_video_for_rnn(video_path, start_frame, end_frame, pd_stage, csv_writer)
+            if ret == False:
+                print('  fail')
+                return False
 
     return True
 
