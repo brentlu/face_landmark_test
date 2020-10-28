@@ -1,15 +1,13 @@
 #!/usr/bin/python3
 
+from facial_recipe import FacialRecipe
 from facial_video import FacialVideo
-from tempfile import NamedTemporaryFile
 import argparse
-import csv
 import cv2
 import magic
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-import shutil
 import time
 
 
@@ -181,45 +179,34 @@ def process_one_video(input_video_path, data_path, start_frame, end_frame):
     return True, (delta_total[0] / em_max[fv.LEFT_EYE]) + (delta_total[1] / em_max[fv.RIGHT_EYE])
 
 def process_training_csv(csv_path, data_path):
-    csv_fields = ['blink', 'm2e', 'date', 'pid', 'type', 'start_frame', 'end_frame', 'duration', 'width_diff', 'data_blink', 'data_eh', 'data_m2e', 'pd_stage']
 
     _, filename = os.path.split(csv_path)
     print('Process training csv: %s' % (filename))
 
-    # update the record in csv file if found
-    temp_file = NamedTemporaryFile(mode = 'w', delete = False)
+    fr = FacialRecipe(csv_path)
 
-    with open(csv_path, 'r') as csv_file, temp_file:
-        csv_reader = csv.DictReader(csv_file)
-        csv_writer = csv.DictWriter(temp_file, fieldnames = csv_fields)
-        csv_writer.writeheader()
+    if fr.init() == False:
+        print('  fail to init recipe')
+        return False
 
-        for row in csv_reader:
-            if row['m2e'] != 'yes':
-                # copy the rows
-                csv_writer.writerow(row)
-                continue
+    while fr.read_next() != False:
+        if fr.get_m2e() != 'yes':
+            continue
 
-            start_frame = int(row['start_frame'])
-            if start_frame == 0:
-                # copy the rows
-                csv_writer.writerow(row)
-                continue
+        start_frame = fr.get_start_frame()
+        if start_frame == 0:
+            continue
 
-            video_path = '/media/Temp_AIpose%s/SJCAM/%s_%s%s.mp4' % (row['date'], row['date'], row['pid'], row['type'])
-            end_frame = int(row['end_frame'])
+        video_path = fr.get_file_path()
+        end_frame = fr.get_end_frame()
 
+        if fr.get_data_m2e() == 0.0:
             ret, delta = process_one_video(video_path, data_path, start_frame, end_frame)
             if ret == False:
                 print('  fail')
                 return False
 
-            row['data_m2e'] = '%.3f' % (delta)
-
-            # copy the rows
-            csv_writer.writerow(row)
-
-    shutil.move(temp_file.name, csv_path)
+            fr.set_data_m2e(delta)
 
     print('  success')
     return True

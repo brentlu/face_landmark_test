@@ -95,6 +95,12 @@ class FacialRecipe:
 
         return self.csv_row['blink']
 
+    def get_m2e(self):
+        if self.__csv_data == False:
+            return 0
+
+        return self.csv_row['m2e']
+
     def get_start_frame(self):
         if self.__csv_data == False:
             return 0
@@ -176,9 +182,18 @@ class FacialRecipe:
 
         self.csv_row['data_eh'] = '%.3f' % (data_eh)
 
+    def get_data_m2e(self):
+        if self.__csv_data == False:
+            return 0.0
+
+        if self.csv_row['data_m2e'] == '':
+            return 0.0
+
+        return float(self.csv_row['data_m2e'])
+
     def set_data_m2e(self, data_m2e):
         if self.__csv_data == False:
             return
 
-        self.csv_row['data_m2e'] = str(data_m2e)
+        self.csv_row['data_m2e'] = '%.3f' % (data_m2e)
 
