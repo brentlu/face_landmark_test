@@ -98,7 +98,7 @@ class FacialRecipe:
     def find_data_m2e(self):
         if self.__csv_data == False:
             print('fr: csv data not available')
-            return 0.0
+            return False, 0.0
 
         with open(self.recipe_path, 'r') as csv_file:
             csv_reader = csv.DictReader(csv_file)
@@ -117,10 +117,10 @@ class FacialRecipe:
                 if row['data_m2e'] == '':
                     return 0.0
 
-                return float(row['data_m2e'])
+                return True, float(row['data_m2e'])
 
         print("fr: fail to find data_m2e");
-        return 0.0
+        return False, 0.0
 
     # standard get/set functions
     def get_blink(self):

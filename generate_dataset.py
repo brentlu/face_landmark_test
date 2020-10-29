@@ -32,9 +32,16 @@ def process_training_csv_for_svm(input_path, dataset_path):
                 continue
 
             if fr.get_m2e() != 'yes':
-                dataset_row = [fr.get_data_blink(), fr.get_data_eh(), fr.find_data_m2e(), fr.get_pd_stage()]
+                ret, m2e = fr.find_data_m2e()
+
+                if ret == False:
+                    continue
+
+                dataset_row = [str(fr.get_data_blink()), str(fr.get_data_eh()), str(m2e), str(fr.get_pd_stage())]
             else:
-                dataset_row = [fr.get_data_blink(), fr.get_data_eh(), fr.get_data_m2e(), fr.get_pd_stage()]
+                dataset_row = [str(fr.get_data_blink()), str(fr.get_data_eh()), str(fr.get_data_m2e()), str(fr.get_pd_stage())]
+
+            csv_writer.writerow(dataset_row)
 
     return True
 
