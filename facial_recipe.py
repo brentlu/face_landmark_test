@@ -6,7 +6,7 @@ import shutil
 
 
 class FacialRecipe:
-    csv_fields = ['blink', 'm2e', 'date', 'pid', 'type', 'start_frame', 'end_frame', 'duration', 'width_diff', 'data_blink', 'data_eh', 'data_m2e', 'pd_stage']
+    csv_fields = ['blink', 'm2e', 'date', 'pid', 'type', 'start_frame', 'end_frame', 'duration', 'width_diff', 'data_blink', 'data_eh', 'data_ma', 'data_m2e', 'pd_stage']
 
     def __init__(self, recipe_path, no_update = False):
         self.__init = False
@@ -95,6 +95,33 @@ class FacialRecipe:
         self.csv_row['data_eh'] = '0'
         self.csv_row['data_m2e'] = '0'
 
+    def find_data_ma(self):
+        if self.__csv_data == False:
+            print('fr: csv data not available')
+            return False, 0.0
+
+        with open(self.recipe_path, 'r') as csv_file:
+            csv_reader = csv.DictReader(csv_file)
+            for row in csv_reader:
+
+                if row['m2e'] != 'yes':
+                    continue
+                if row['date'] != self.csv_row['date']:
+                    continue
+                if row['pid'] != self.csv_row['pid']:
+                    continue
+                start_frame = int(row['start_frame'])
+                if start_frame == 0:
+                    continue
+
+                if row['data_ma'] == '':
+                    return 0.0
+
+                return True, float(row['data_ma'])
+
+        print("fr: fail to find data_ma");
+        return False, 0.0
+
     def find_data_m2e(self):
         if self.__csv_data == False:
             print('fr: csv data not available')
@@ -126,20 +153,35 @@ class FacialRecipe:
     def get_blink(self):
         if self.__csv_data == False:
             print('fr: csv data not available')
-            return 0
+            return 'no'
+
+        if 'blink' not in self.csv_row:
+            return 'no'
+
+        if self.csv_row['blink'] == '':
+            return 'no'
 
         return self.csv_row['blink']
 
     def get_m2e(self):
         if self.__csv_data == False:
             print('fr: csv data not available')
-            return 0
+            return 'no'
+
+        if 'm2e' not in self.csv_row:
+            return 'no'
+
+        if self.csv_row['m2e'] == '':
+            return 'no'
 
         return self.csv_row['m2e']
 
     def get_start_frame(self):
         if self.__csv_data == False:
             print('fr: csv data not available')
+            return 0
+
+        if 'start_frame' not in self.csv_row:
             return 0
 
         if self.csv_row['start_frame'] == '':
@@ -159,6 +201,9 @@ class FacialRecipe:
             print('fr: csv data not available')
             return 0
 
+        if 'end_frame' not in self.csv_row:
+            return 0
+
         if self.csv_row['end_frame'] == '':
             return 0
 
@@ -174,6 +219,9 @@ class FacialRecipe:
     def get_duration(self):
         if self.__csv_data == False:
             print('fr: csv data not available')
+            return 0.0
+
+        if 'data_blink' not in self.csv_row:
             return 0.0
 
         if self.csv_row['duration'] == '':
@@ -200,6 +248,9 @@ class FacialRecipe:
             print('fr: csv data not available')
             return 0
 
+        if 'data_blink' not in self.csv_row:
+            return 0
+
         if self.csv_row['data_blink'] == '':
             return 0
 
@@ -217,6 +268,9 @@ class FacialRecipe:
             print('fr: csv data not available')
             return 0.0
 
+        if 'data_eh' not in self.csv_row:
+            return 0.0
+
         if self.csv_row['data_eh'] == '':
             return 0.0
 
@@ -229,9 +283,32 @@ class FacialRecipe:
 
         self.csv_row['data_eh'] = '%.3f' % (data_eh)
 
+    def get_data_ma(self):
+        if self.__csv_data == False:
+            print('fr: csv data not available')
+            return 0.0
+
+        if 'data_ma' not in self.csv_row:
+            return 0.0
+
+        if self.csv_row['data_ma'] == '':
+            return 0.0
+
+        return float(self.csv_row['data_ma'])
+
+    def set_data_ma(self, data_ma):
+        if self.__csv_data == False:
+            print('fr: csv data not available')
+            return
+
+        self.csv_row['data_ma'] = '%.3f' % (data_ma)
+
     def get_data_m2e(self):
         if self.__csv_data == False:
             print('fr: csv data not available')
+            return 0.0
+
+        if 'data_m2e' not in self.csv_row:
             return 0.0
 
         if self.csv_row['data_m2e'] == '':
@@ -249,6 +326,9 @@ class FacialRecipe:
     def get_pd_stage(self):
         if self.__csv_data == False:
             print('fr: csv data not available')
+            return 0
+
+        if 'pd_stage' not in self.csv_row:
             return 0
 
         if self.csv_row['pd_stage'] == '':

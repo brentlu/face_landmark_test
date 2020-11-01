@@ -4,6 +4,7 @@ from facial_engine import FacialEngine
 from scipy.spatial import distance as dist
 import csv
 import cv2
+import math
 import numpy as np
 import os
 
@@ -240,6 +241,33 @@ class FacialVideo:
         right = dist.euclidean(landmarks[45], landmarks[54])
 
         return left, right
+
+    def calculate_mouth_angle(self, landmarks = None):
+        if landmarks is None:
+            landmarks = self.__landmarks
+
+        if len(landmarks) != 68:
+            print('fv: invalid landmarks')
+            return 0.0
+
+        dx1 = landmarks[54][0] - landmarks[48][0]
+        dy1 = landmarks[54][1] - landmarks[48][1]
+        dx2 = landmarks[51][0] - landmarks[57][0]
+        dy2 = landmarks[51][1] - landmarks[57][1]
+
+        angle1 = math.atan2(dy1, dx1)
+        angle1 = angle1 * 180.0 / math.pi
+        angle2 = math.atan2(dy2, dx2)
+        angle2 = angle2 * 180.0 / math.pi
+
+        if angle1 * angle2 >= 0.0:
+            return abs(angle1 - angle2)
+
+        included_angle = abs(angle1) + abs(angle2)
+        if included_angle > 180.0:
+            included_angle = 360.0 - included_angle
+
+        return included_angle
 
     def update_statistic_data(self, start = 0, end = 0):
         total_frame = 0

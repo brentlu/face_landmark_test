@@ -79,7 +79,7 @@ def process_one_video(input_video_path, data_path, start_frame, end_frame):
 
     if fv.init() == False:
         print('  fail to init engine')
-        return False, 0.0
+        return False, 0.0, 0.0
 
     ret = fv.update_statistic_data(start_frame, end_frame)
 
@@ -87,7 +87,7 @@ def process_one_video(input_video_path, data_path, start_frame, end_frame):
 
     if ret == False:
         print('  fail')
-        return False, 0.0
+        return False, 0.0, 0.0
 
     em_min = fv.get_eye_to_mouth_length(fv.MIN)
     em_avg = fv.get_eye_to_mouth_length(fv.AVG)
@@ -113,7 +113,10 @@ def process_one_video(input_video_path, data_path, start_frame, end_frame):
     log_print(log_file, 'Process frame:')
 
     em_prev = np.zeros((2, 1), dtype = float)
-    delta_total = np.zeros((2, 1), dtype = float)
+    em_delta_total = np.zeros((2, 1), dtype = float)
+
+    ma_prev = 0.0
+    ma_delta_total = 0.0
 
     while True:
         frame_index += 1
@@ -144,21 +147,31 @@ def process_one_video(input_video_path, data_path, start_frame, end_frame):
             em = np.array(fv.calculate_eye_to_mouth_length())
 
             if em_prev[0] != 0.0 or em_prev[1] != 0.0:
-                delta = em - em_prev
+                em_delta = em - em_prev
             else:
-                delta = np.zeros((2, 1), dtype = float)
+                em_delta = np.zeros((2, 1), dtype = float)
 
             em_prev = em
+
+            ma = fv.calculate_mouth_angle()
+
+            if ma_prev != 0.0:
+                ma_delta = ma - ma_prev
+            else:
+                ma_delta = 0.0
+
+            ma_prev = ma
 
             #length_left = em[fv.LEFT_EYE] * 100.0 / fv.eye_to_mouth[fv.LEFT_EYE][fv.MAX]
             #length_right = em[fv.RIGHT_EYE] * 100.0 / fv.eye_to_mouth[fv.RIGHT_EYE][fv.MAX]
 
-            log_print(log_file, '  frame: %3d, time: %.3f, length: %.3f %.3f, delta %+.3f %+.3f' % (frame_index, time_stamp, em[fv.LEFT_EYE], em[fv.RIGHT_EYE], delta[0], delta[1]), end = '')
+            log_print(log_file, '  frame: %3d, time: %.3f, length: %.3f %.3f, em_delta %+.3f %+.3f, ma_delta %+.3f' % (frame_index, time_stamp, em[fv.LEFT_EYE], em[fv.RIGHT_EYE], em_delta[0], em_delta[1], ma_delta), end = '')
             log_print(log_file, '')
 
-            delta_total[0] = delta_total[0] + abs(delta[0])
-            delta_total[1] = delta_total[1] + abs(delta[1])
+            em_delta_total[0] = em_delta_total[0] + abs(em_delta[0])
+            em_delta_total[1] = em_delta_total[1] + abs(em_delta[1])
 
+            ma_delta_total = ma_delta_total + abs(ma_delta)
         else:
             log_print(log_file, '  frame: %3d, no landmarks' % (frame_index))
             frame_no_landmarks += 1
@@ -171,12 +184,12 @@ def process_one_video(input_video_path, data_path, start_frame, end_frame):
     log_print(log_file, 'Statistic:')
     log_print(log_file, '  total %d frames processed' % (end_frame - start_frame + 1))
     log_print(log_file, '  %d frames (%3.2f%%) has no landmarks' % (frame_no_landmarks, (frame_no_landmarks * 100.0) / (end_frame - start_frame + 1)))
-    log_print(log_file, '  total delta %.3f %.3f' % (delta_total[0], delta_total[1]))
+    log_print(log_file, '  total em_delta %.3f %.3f' % (em_delta_total[0], em_delta_total[1]))
     log_print(log_file, 'Process complete')
 
     log_stop(log_file)
 
-    return True, (delta_total[0] / em_max[fv.LEFT_EYE]) + (delta_total[1] / em_max[fv.RIGHT_EYE])
+    return True, (em_delta_total[0] / em_max[fv.LEFT_EYE]) + (em_delta_total[1] / em_max[fv.RIGHT_EYE]), ma_delta_total
 
 def process_training_csv(csv_path, data_path):
 
@@ -200,13 +213,14 @@ def process_training_csv(csv_path, data_path):
         video_path = fr.get_file_path()
         end_frame = fr.get_end_frame()
 
-        if fr.get_data_m2e() == 0.0:
-            ret, delta = process_one_video(video_path, data_path, start_frame, end_frame)
+        if fr.get_data_m2e() == 0.0 or fr.get_data_ma() == 0.0:
+            ret, em_delta, ma_delta = process_one_video(video_path, data_path, start_frame, end_frame)
             if ret == False:
                 print('  fail')
                 return False
 
-            fr.set_data_m2e(delta)
+            fr.set_data_m2e(em_delta)
+            fr.set_data_ma(ma_delta)
 
     print('  success')
     return True
