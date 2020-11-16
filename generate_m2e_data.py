@@ -79,7 +79,7 @@ def process_one_video(input_video_path, data_path, start_frame, end_frame):
 
     if fv.init() == False:
         print('  fail to init engine')
-        return False, 0.0, 0.0
+        return False, 0.0, 0.0, 0.0
 
     ret = fv.update_statistic_data(start_frame, end_frame)
 
@@ -87,11 +87,13 @@ def process_one_video(input_video_path, data_path, start_frame, end_frame):
 
     if ret == False:
         print('  fail')
-        return False, 0.0, 0.0
+        return False, 0.0, 0.0, 0.0
 
     em_min = fv.get_eye_to_mouth_length(fv.MIN)
     em_avg = fv.get_eye_to_mouth_length(fv.AVG)
     em_max = fv.get_eye_to_mouth_length(fv.MAX)
+
+    mh_max = fv.get_mouth_height(fv.MAX)
 
     print('  eye to mouth(left):      min %.3f, avg %.3f, max %.3f' % (em_min[fv.LEFT_EYE], em_avg[fv.LEFT_EYE], em_max[fv.LEFT_EYE]))
     print('  eye to mouth(right):     min %.3f, avg %.3f, max %.3f' % (em_min[fv.RIGHT_EYE], em_avg[fv.RIGHT_EYE], em_max[fv.RIGHT_EYE]))
@@ -117,6 +119,9 @@ def process_one_video(input_video_path, data_path, start_frame, end_frame):
 
     ma_prev = 0.0
     ma_delta_total = 0.0
+
+    mh_prev = 0.0
+    mh_delta_total = 0.0
 
     while True:
         frame_index += 1
@@ -162,16 +167,28 @@ def process_one_video(input_video_path, data_path, start_frame, end_frame):
 
             ma_prev = ma
 
+            mh = fv.calculate_mouth_height()
+
+            if mh_prev != 0.0:
+                mh_delta = mh - mh_prev
+            else:
+                mh_delta = 0.0
+
+            mh_prev = mh
+
+
             #length_left = em[fv.LEFT_EYE] * 100.0 / fv.eye_to_mouth[fv.LEFT_EYE][fv.MAX]
             #length_right = em[fv.RIGHT_EYE] * 100.0 / fv.eye_to_mouth[fv.RIGHT_EYE][fv.MAX]
 
-            log_print(log_file, '  frame: %3d, time: %.3f, length: %.3f %.3f, em_delta %+.3f %+.3f, ma_delta %+.3f' % (frame_index, time_stamp, em[fv.LEFT_EYE], em[fv.RIGHT_EYE], em_delta[0], em_delta[1], ma_delta), end = '')
+            log_print(log_file, '  frame: %3d, time: %.3f, length: %.3f %.3f, em_delta %+.3f %+.3f, ma_delta %+.3f, mh_delta %+.3f' % (frame_index, time_stamp, em[fv.LEFT_EYE], em[fv.RIGHT_EYE], em_delta[0], em_delta[1], ma_delta, mh_delta), end = '')
             log_print(log_file, '')
 
             em_delta_total[0] = em_delta_total[0] + abs(em_delta[0])
             em_delta_total[1] = em_delta_total[1] + abs(em_delta[1])
 
             ma_delta_total = ma_delta_total + abs(ma_delta)
+
+            mh_delta_total = mh_delta_total + abs(mh_delta)
         else:
             log_print(log_file, '  frame: %3d, no landmarks' % (frame_index))
             frame_no_landmarks += 1
@@ -189,7 +206,7 @@ def process_one_video(input_video_path, data_path, start_frame, end_frame):
 
     log_stop(log_file)
 
-    return True, (em_delta_total[0] / em_max[fv.LEFT_EYE]) + (em_delta_total[1] / em_max[fv.RIGHT_EYE]), ma_delta_total
+    return True, (em_delta_total[0] / em_max[fv.LEFT_EYE]) + (em_delta_total[1] / em_max[fv.RIGHT_EYE]), ma_delta_total, mh_delta_total
 
 def process_training_csv(csv_path, data_path):
 
@@ -213,14 +230,15 @@ def process_training_csv(csv_path, data_path):
         video_path = fr.get_file_path()
         end_frame = fr.get_end_frame()
 
-        if fr.get_data_m2e() == 0.0 or fr.get_data_ma() == 0.0:
-            ret, em_delta, ma_delta = process_one_video(video_path, data_path, start_frame, end_frame)
+        if fr.get_data_m2e() == 0.0 or fr.get_data_ma() == 0.0 or fr.get_data_mh() == 0.0:
+            ret, em_delta, ma_delta, mh_delta = process_one_video(video_path, data_path, start_frame, end_frame)
             if ret == False:
                 print('  fail')
                 return False
 
             fr.set_data_m2e(em_delta)
             fr.set_data_ma(ma_delta)
+            fr.set_data_mh(mh_delta)
 
     print('  success')
     return True

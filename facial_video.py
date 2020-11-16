@@ -77,10 +77,19 @@ class FacialVideo:
         self.eye_width[self.LEFT_EYE][self.MIN] = 1000.0
         self.eye_width[self.RIGHT_EYE][self.MIN] = 1000.0
 
+        # initial eye inner height
+        self.inner_eye_height = np.zeros((2, 3), dtype = float)
+        self.inner_eye_height[self.LEFT_EYE][self.MIN] = 10000.0
+        self.inner_eye_height[self.RIGHT_EYE][self.MIN] = 10000.0
+
         # initial eye-to-mouth length
         self.eye_to_mouth = np.zeros((2, 3), dtype = float)
         self.eye_to_mouth[self.LEFT_EYE][self.MIN] = 10000.0
         self.eye_to_mouth[self.RIGHT_EYE][self.MIN] = 10000.0
+
+        # initial mouth height
+        self.mouth_height = np.zeros(3, dtype = float)
+        self.mouth_height[self.MIN] = 10000.0
 
         self.__init = True
         return
@@ -269,6 +278,18 @@ class FacialVideo:
 
         return included_angle
 
+    def calculate_mouth_height(self, landmarks = None):
+        if landmarks is None:
+            landmarks = self.__landmarks
+
+        if len(landmarks) != 68:
+            print('fv: invalid landmarks')
+            return 0.0, 0.0
+
+        height = dist.euclidean(landmarks[51], landmarks[57])
+
+        return height
+
     def update_statistic_data(self, start = 0, end = 0):
         total_frame = 0
 
@@ -291,6 +312,10 @@ class FacialVideo:
         self.eye_to_mouth = np.zeros((2, 3), dtype = float)
         self.eye_to_mouth[self.LEFT_EYE][self.MIN] = 10000.0
         self.eye_to_mouth[self.RIGHT_EYE][self.MIN] = 10000.0
+
+        # initial mouth height
+        self.mouth_height = np.zeros(3, dtype = float)
+        self.mouth_height[self.MIN] = 10000.0
 
         # open the csv file
         with open(self.__csv_path, 'r', newline = '') as csv_file:
@@ -317,6 +342,7 @@ class FacialVideo:
                 ew = self.calculate_eye_width(landmarks)
                 ieh = self.calculate_inner_eye_height(landmarks)
                 em = self.calculate_eye_to_mouth_length(landmarks)
+                mh = self.calculate_mouth_height(landmarks)
 
                 eyes = (self.LEFT_EYE, self.RIGHT_EYE)
 
@@ -345,6 +371,12 @@ class FacialVideo:
                         self.eye_to_mouth[eye][self.MAX] = em[eye]
                     self.eye_to_mouth[eye][self.AVG] += em[eye]
 
+                if mh < self.mouth_height[self.MIN]:
+                    self.mouth_height[self.MIN] = mh;
+                if mh > self.mouth_height[self.MAX]:
+                    self.mouth_height[self.MAX] = mh;
+                self.mouth_height[self.AVG] += mh;
+
                 total_frame += 1
 
         if total_frame != 0:
@@ -353,6 +385,7 @@ class FacialVideo:
                 self.eye_width[eye][self.AVG] /= total_frame
                 self.inner_eye_height[eye][self.AVG] /= total_frame
                 self.eye_to_mouth[eye][self.AVG] /= total_frame
+            self.mouth_height[self.AVG] /= total_frame
 
             self.__statistic_data = True
             return True
@@ -403,6 +436,17 @@ class FacialVideo:
             return 0.0, 0.0
 
         return self.eye_to_mouth[self.LEFT_EYE][type], self.eye_to_mouth[self.RIGHT_EYE][type]
+
+    def get_mouth_height(self, type):
+        if type != self.MIN and type != self.AVG and type != self.MAX:
+            print('fv: invalid type %s' % (str(type)))
+            return 0.0
+
+        if self.__statistic_data == False:
+            print('fv: statistic data not available')
+            return 0.0
+
+        return self.mouth_height[type]
 
     def find_face_rect(self, start = 0, end = 0):
         rect_left = self.width

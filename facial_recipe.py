@@ -6,7 +6,7 @@ import shutil
 
 
 class FacialRecipe:
-    csv_fields = ['blink', 'm2e', 'date', 'pid', 'type', 'start_frame', 'end_frame', 'duration', 'width_diff', 'data_blink', 'data_eh', 'data_ma', 'data_m2e', 'pd_stage']
+    csv_fields = ['blink', 'm2e', 'date', 'pid', 'type', 'start_frame', 'end_frame', 'duration', 'width_diff', 'data_blink', 'data_eh', 'data_ma', 'data_mh', 'data_m2e', 'pd_stage']
 
     def __init__(self, recipe_path, no_update = False):
         self.__init = False
@@ -302,6 +302,26 @@ class FacialRecipe:
             return
 
         self.csv_row['data_ma'] = '%.3f' % (data_ma)
+
+    def get_data_mh(self):
+        if self.__csv_data == False:
+            print('fr: csv data not available')
+            return 0.0
+
+        if 'data_mh' not in self.csv_row:
+            return 0.0
+
+        if self.csv_row['data_mh'] == '':
+            return 0.0
+
+        return float(self.csv_row['data_mh'])
+
+    def set_data_mh(self, data_mh):
+        if self.__csv_data == False:
+            print('fr: csv data not available')
+            return
+
+        self.csv_row['data_mh'] = '%.3f' % (data_mh)
 
     def get_data_m2e(self):
         if self.__csv_data == False:
