@@ -42,9 +42,14 @@ def process_training_csv_for_svm(input_path, dataset_path):
                 if ret == False:
                     continue
 
-                dataset_row = [str(fr.get_data_blink()), str(fr.get_data_eh()), str(ma), str(m2e), str(fr.get_pd_stage())]
+                ret, mh = fr.find_data_mh()
+
+                if ret == False:
+                    continue
+
+                dataset_row = [str(fr.get_data_blink()), str(fr.get_data_eh()), str(ma), str(mh), str(m2e), str(fr.get_pd_stage())]
             else:
-                dataset_row = [str(fr.get_data_blink()), str(fr.get_data_eh()), str(fr.get_data_ma()), str(fr.get_data_m2e()), str(fr.get_pd_stage())]
+                dataset_row = [str(fr.get_data_blink()), str(fr.get_data_eh()), str(fr.get_data_ma()), str(fr.get_data_mh()), str(fr.get_data_m2e()), str(fr.get_pd_stage())]
 
             csv_writer.writerow(dataset_row)
 

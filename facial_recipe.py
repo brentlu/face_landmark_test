@@ -149,6 +149,33 @@ class FacialRecipe:
         print("fr: fail to find data_m2e");
         return False, 0.0
 
+    def find_data_mh(self):
+        if self.__csv_data == False:
+            print('fr: csv data not available')
+            return False, 0.0
+
+        with open(self.recipe_path, 'r') as csv_file:
+            csv_reader = csv.DictReader(csv_file)
+            for row in csv_reader:
+
+                if row['m2e'] != 'yes':
+                    continue
+                if row['date'] != self.csv_row['date']:
+                    continue
+                if row['pid'] != self.csv_row['pid']:
+                    continue
+                start_frame = int(row['start_frame'])
+                if start_frame == 0:
+                    continue
+
+                if row['data_mh'] == '':
+                    return 0.0
+
+                return True, float(row['data_mh'])
+
+        print("fr: fail to find data_mh");
+        return False, 0.0
+
     # standard get/set functions
     def get_blink(self):
         if self.__csv_data == False:
