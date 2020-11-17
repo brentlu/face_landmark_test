@@ -6,7 +6,7 @@ import shutil
 
 
 class FacialRecipe:
-    csv_fields = ['blink', 'm2e', 'date', 'pid', 'type', 'start_frame', 'end_frame', 'duration', 'width_diff', 'data_blink', 'data_eh', 'data_ma', 'data_mh', 'data_m2e', 'pd_stage']
+    csv_fields = ['blink', 'm2e', 'date', 'pid', 'type', 'start_frame', 'end_frame', 'duration', 'width_diff', 'data_blink', 'data_eh', 'data_ma', 'data_mh', 'data_m2e', 'age', 'pd_stage']
 
     def __init__(self, recipe_path, no_update = False):
         self.__init = False
@@ -203,6 +203,32 @@ class FacialRecipe:
 
         return self.csv_row['m2e']
 
+    def get_date(self):
+        if self.__csv_data == False:
+            print('fr: csv data not available')
+            return 0
+
+        if 'date' not in self.csv_row:
+            return '0'
+
+        if self.csv_row['date'] == '':
+            return '0'
+
+        return self.csv_row['date']
+
+    def get_pid(self):
+        if self.__csv_data == False:
+            print('fr: csv data not available')
+            return 0
+
+        if 'pid' not in self.csv_row:
+            return '0'
+
+        if self.csv_row['pid'] == '':
+            return '0'
+
+        return self.csv_row['pid']
+
     def get_start_frame(self):
         if self.__csv_data == False:
             print('fr: csv data not available')
@@ -369,6 +395,19 @@ class FacialRecipe:
             return
 
         self.csv_row['data_m2e'] = '%.3f' % (data_m2e)
+
+    def get_age(self):
+        if self.__csv_data == False:
+            print('fr: csv data not available')
+            return 0
+
+        if 'age' not in self.csv_row:
+            return 0
+
+        if self.csv_row['age'] == '':
+            return 0
+
+        return int(self.csv_row['age'])
 
     def get_pd_stage(self):
         if self.__csv_data == False:
